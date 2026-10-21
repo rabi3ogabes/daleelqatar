@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Services\DashboardMetrics;
 use App\Support\ChartPalette;
+use App\Support\Enrichment\DataQuality;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
@@ -30,6 +31,7 @@ class DashboardController extends Controller
             'recentSubmissions' => $metrics->recentSubmissions(),
             'activity' => $metrics->recentActivity(),
             'topSearches' => $metrics->topSearches(),
+            'quality' => auth()->user()->can('imports.manage') ? DataQuality::stats() : null,
         ]);
     }
 }

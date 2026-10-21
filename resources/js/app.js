@@ -438,4 +438,80 @@ Alpine.data('importRunner', (processUrl, initial, config = {}) => ({
 }));
 
 window.Alpine = Alpine;
+/* Google rating & reviews: fetched when the section scrolls into view ------- */
+Alpine.data('googleReviews', (url) => ({
+    data: null,
+    loading: true,
+    failed: false,
+    init() {
+        const load = () => fetch(url, { headers: { Accept: 'application/json' } })
+            .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+            .then((d) => (this.data = d))
+            .catch(() => (this.failed = true))
+            .finally(() => (this.loading = false));
+        if (!('IntersectionObserver' in window)) return load();
+        const io = new IntersectionObserver((entries) => {
+            if (entries.some((e) => e.isIntersecting)) {
+                io.disconnect();
+                load();
+            }
+        }, { rootMargin: '300px' });
+        io.observe(this.$el);
+    },
+    countLabel(n) {
+        const label = document.documentElement.lang === 'ar' ? 'مراجعة' : n === 1 ? 'review' : 'reviews';
+        return `${Number(n).toLocaleString()} ${label}`;
+    },
+}));
+
+/* Smart enrichment: bulk runner (one server step at a time, safe to stop) ---- */
+Alpine.data('enrichmentRunner', (cfg) => ({
+    cfg,
+    mode: cfg.ai ? 'names' : 'full',
+    scope: 'not_enriched',
+    google: cfg.google,
+    website: true,
+    ai: cfg.ai,
+    busy: false,
+    finished: false,
+    stopping: false,
+    processed: 0,
+    suggested: 0,
+    errors: 0,
+    remaining: 0,
+    error: '',
+    get percent() {
+        const total = this.processed + this.remaining;
+        return total ? Math.min(100, Math.round((this.processed / total) * 100)) : 0;
+    },
+    async start() {
+        Object.assign(this, { busy: true, finished: false, stopping: false, processed: 0, suggested: 0, errors: 0, error: '' });
+        this.remaining = this.cfg.counts[this.mode === 'names' ? 'missing_arabic' : this.scope] || 0;
+        let cursor = 0;
+        let failures = 0;
+        while (!this.stopping) {
+            try {
+                const r = await postJson(this.cfg.url, { scope: this.scope, mode: this.mode, cursor, google: this.google, website: this.website, ai: this.ai });
+                failures = 0;
+                this.error = '';
+                cursor = r.cursor;
+                this.processed += r.processed;
+                this.suggested += r.suggested;
+                this.errors += r.errors;
+                this.remaining = r.remaining;
+                if (r.done || r.processed === 0) break;
+            } catch (err) {
+                this.error = err.message;
+                if (err.status === 422 || ++failures >= 4) break;
+                await new Promise((resolve) => setTimeout(resolve, 2000 * failures));
+            }
+        }
+        this.busy = false;
+        this.finished = true;
+    },
+    stop() {
+        this.stopping = true;
+    },
+}));
+
 Alpine.start();

@@ -20,6 +20,11 @@ final class Normalizer
         'maps.app.goo.gl', 'g.page', 'bit.ly', 'blogspot.com', 'wordpress.com', 'wixsite.com', 'business.site',
         'qatarliving.com', 'qataryello.com', 'qatarcontact.com', 'connect.com.qa', 'businessdirectorymiddleeast.com',
         'yellowpages.qa', 'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+        // Free and ISP mail providers: an address there says nothing about the company's website.
+        'googlemail.com', 'live.com', 'msn.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'ymail.com', 'rocketmail.com',
+        'proton.me', 'protonmail.com', 'gmx.com', 'gmx.net', 'mail.com', 'yandex.com', 'yandex.ru', 'zoho.com', 'zohomail.com',
+        'rediffmail.com', 'qatar.net.qa', 'live.co.uk', 'hotmail.co.uk', 'yahoo.co.uk', 'yahoo.co.in', 'hotmail.fr', 'live.fr',
+        'outlook.sa', 'hotmail.it', 'web.de', 'mail.ru', 'inbox.com', 'hushmail.com', '163.com', 'qq.com',
     ];
 
     /** Legal-form words ignored when comparing company names. */

@@ -66,6 +66,7 @@ class SeoController extends Controller
             'Disallow: /*?*sort=',
             'Disallow: /business/*/reveal/', 'Disallow: /en/business/*/reveal/',
             'Disallow: /map/data.json', 'Disallow: /en/map/data.json',
+            'Disallow: /business/*/google.json', 'Disallow: /en/business/*/google.json',
             'Disallow: /csrf-token',
             '',
             'Sitemap: '.route('sitemap'),

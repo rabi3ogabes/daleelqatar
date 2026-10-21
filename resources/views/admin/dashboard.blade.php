@@ -28,6 +28,35 @@
         @endforeach
     </div>
 
+    {{-- Listing quality: what is still missing and what is waiting for review --}}
+    @if($quality)
+        <x-dash.panel class="mt-6" :title="__('enrichment.quality.title')" :subtitle="__('enrichment.quality.subtitle')">
+            <x-slot:actions>
+                <a href="{{ route('admin.enrichment.index') }}" class="btn btn-primary btn-sm"><x-icon name="sparkles" class="size-4" />{{ __('enrichment.quality.cta') }}</a>
+            </x-slot:actions>
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                @foreach([
+                    ['pending', 'inbox', route('admin.enrichment.index', ['tab' => 'pending'])],
+                    ['missing_arabic', 'languages', route('admin.enrichment.index')],
+                    ['no_website_found', 'globe', route('admin.enrichment.index', ['tab' => 'no_website'])],
+                    ['missing_description', 'file-text', route('admin.enrichment.index')],
+                    ['missing_location', 'map-pin', route('admin.enrichment.index')],
+                ] as [$key, $icon, $href])
+                    @php $pct = $quality['total'] > 0 && $key !== 'pending' ? round($quality[$key] / $quality['total'] * 100) : null; @endphp
+                    <a href="{{ $href }}" class="group rounded-xl border border-navy-100 p-4 transition hover:border-gold-300 hover:bg-gold-50/40">
+                        <span class="flex items-center justify-between gap-2">
+                            <span class="flex size-9 items-center justify-center rounded-lg bg-navy-50 text-navy-700 group-hover:bg-white"><x-icon :name="$icon" class="size-4.5" /></span>
+                            @if($pct !== null)<span class="text-xs font-semibold tabular-nums text-muted-strong">{{ $pct }}%</span>@endif
+                        </span>
+                        <span class="mt-3 block text-xl font-bold tabular-nums text-navy-900">{{ format_number($quality[$key]) }}</span>
+                        <span class="block text-xs text-muted-strong">{{ __('enrichment.quality.'.$key) }}</span>
+                        @if($pct !== null)<span class="mt-2 block h-1 overflow-hidden rounded-full bg-navy-100"><span class="block h-full rounded-full bg-gold-500" style="width: {{ $pct }}%"></span></span>@endif
+                    </a>
+                @endforeach
+            </div>
+        </x-dash.panel>
+    @endif
+
     {{-- Charts --}}
     <div class="mt-6 grid gap-6 xl:grid-cols-3">
         <x-dash.panel class="xl:col-span-2" :title="__('admin.dashboard.growth')" :subtitle="__('admin.dashboard.growth_hint')">

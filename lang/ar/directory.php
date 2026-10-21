@@ -80,4 +80,16 @@ return [
         'decline' => 'رفض',
     ],
     'ad_label' => 'إعلان',
+    'google' => [
+        'title' => 'تقييمات Google',
+        'unavailable' => 'تقييمات Google غير متاحة حالياً.',
+        'more' => 'عرض المزيد',
+        'less' => 'عرض أقل',
+        'translated' => 'مترجمة بواسطة Google',
+        'no_reviews' => 'لا توجد مراجعات على Google بعد.',
+        'all' => 'كل المراجعات على Google',
+        'write' => 'اكتب مراجعة',
+        'attribution' => 'المراجعات من Google',
+        'view_on_maps' => 'عرض في خرائط Google',
+    ],
 ];

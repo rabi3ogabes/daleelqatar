@@ -14,6 +14,8 @@ use App\Services\ClaimService;
 use App\Services\ReviewService;
 use App\Support\BusinessSummary;
 use App\Support\Directory;
+use App\Support\Enrichment\GooglePlaces;
+use App\Support\Enrichment\GoogleReviews;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -105,6 +107,16 @@ class BusinessController extends Controller
             'icon' => 'clock',
             'favoriteIds' => Directory::favoriteIds(),
         ]);
+    }
+
+    /** Google rating and reviews for a listing linked to Google Maps (loaded when the section scrolls into view). */
+    public function google(Business $business, GoogleReviews $reviews): JsonResponse
+    {
+        abort_unless($business->isPublished() && $business->google_place_id && GooglePlaces::reviewsEnabled(), 404);
+        $data = $reviews->for($business->google_place_id, app()->getLocale());
+        abort_if($data === null, 404);
+
+        return response()->json($data)->header('X-Robots-Tag', 'noindex');
     }
 
     /** View beacon sent by the profile page (one view per visitor every 30 minutes, bots excluded). */

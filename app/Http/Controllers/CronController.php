@@ -50,6 +50,17 @@ class CronController extends Controller
             }
         }
 
+        // Optional daily enrichment (Admin → Settings → Google & integrations); suggestions still need approval.
+        $daily = min(200, (int) setting('integrations.enrichment_daily', 0));
+        if ($daily > 0) {
+            try {
+                $results['daleel:enrich'] = Artisan::call('daleel:enrich', ['--limit' => $daily, '--seconds' => 40]) === 0 ? 'ok' : 'failed';
+            } catch (Throwable $e) {
+                report($e);
+                $results['daleel:enrich'] = 'failed';
+            }
+        }
+
         $failed = in_array('failed', $results, true);
 
         return response()->json(['status' => $failed ? 'failed' : 'ok', 'commands' => $results], $failed ? 500 : 200);

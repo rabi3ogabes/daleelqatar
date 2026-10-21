@@ -50,6 +50,14 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified', 'can:adm
         Route::delete('/discovery/{source}', [Admin\DiscoveryController::class, 'destroy'])->name('discovery.destroy');
         Route::post('/discovery/{source}/run', [Admin\DiscoveryController::class, 'run'])->middleware('throttle:30,1')->name('discovery.run');
         Route::post('/discovery/test', [Admin\DiscoveryController::class, 'test'])->middleware('throttle:30,1')->name('discovery.test');
+
+        Route::get('/enrichment', [Admin\EnrichmentController::class, 'index'])->name('enrichment.index');
+        Route::post('/enrichment/bulk', [Admin\EnrichmentController::class, 'bulk'])->middleware('throttle:120,1')->name('enrichment.bulk');
+        Route::post('/enrichment/businesses/{business}', [Admin\EnrichmentController::class, 'business'])->whereNumber('business')->middleware('throttle:30,1')->name('enrichment.business');
+        Route::get('/enrichment/{suggestion}', [Admin\EnrichmentController::class, 'show'])->whereNumber('suggestion')->name('enrichment.show');
+        Route::post('/enrichment/{suggestion}/approve', [Admin\EnrichmentController::class, 'approve'])->whereNumber('suggestion')->name('enrichment.approve');
+        Route::post('/enrichment/{suggestion}/reject', [Admin\EnrichmentController::class, 'reject'])->whereNumber('suggestion')->name('enrichment.reject');
+        Route::post('/enrichment/{suggestion}/place', [Admin\EnrichmentController::class, 'place'])->whereNumber('suggestion')->middleware('throttle:30,1')->name('enrichment.place');
     });
 
     Route::middleware('can:claims.review')->group(function () {

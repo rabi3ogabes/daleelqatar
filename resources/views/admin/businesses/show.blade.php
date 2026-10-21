@@ -136,6 +136,34 @@
                 </ol>
             </x-dash.panel>
 
+            {{-- Smart enrichment --}}
+            @can('imports.manage')@unless($business->trashed())
+                @php $latest = \App\Models\BusinessSuggestion::query()->where('business_id', $business->id)->latest('id')->first(); @endphp
+                <x-dash.panel :title="__('enrichment.panel.title')" :subtitle="__('enrichment.panel.subtitle')">
+                    <x-slot:actions>
+                        <form method="POST" action="{{ route('admin.enrichment.business', $business->id) }}">@csrf<button class="btn btn-primary btn-sm" data-busy><x-icon name="sparkles" class="size-4" />{{ $business->enriched_at ? __('enrichment.recheck') : __('enrichment.panel.run') }}</button></form>
+                    </x-slot:actions>
+                    <dl class="grid gap-3 text-sm sm:grid-cols-3">
+                        <div class="rounded-xl bg-navy-50/60 p-3">
+                            <dt class="text-xs text-muted-strong">{{ __('enrichment.panel.google') }}</dt>
+                            <dd class="mt-1 font-semibold text-navy-900">
+                                @if($business->google_maps_url)<a href="{{ $business->google_maps_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-gold-700 hover:underline"><x-icon name="map-pin" class="size-3.5" />{{ __('enrichment.panel.linked') }}</a>@else{{ __('enrichment.panel.not_linked') }}@endif
+                            </dd>
+                        </div>
+                        <div class="rounded-xl bg-navy-50/60 p-3">
+                            <dt class="text-xs text-muted-strong">{{ __('enrichment.panel.website') }}</dt>
+                            <dd @class(['mt-1 font-semibold', 'text-warning' => in_array($business->website_status, ['none', 'unreachable'], true), 'text-navy-900' => ! in_array($business->website_status, ['none', 'unreachable'], true)])>{{ __('enrichment.website_status.'.($business->website_status ?? 'unknown')) }}</dd>
+                        </div>
+                        <div class="rounded-xl bg-navy-50/60 p-3">
+                            <dt class="text-xs text-muted-strong">{{ __('enrichment.panel.last_run') }}</dt>
+                            <dd class="mt-1 font-semibold text-navy-900">
+                                @if($latest)<a href="{{ route('admin.enrichment.show', $latest) }}" class="text-gold-700 hover:underline">{{ __('enrichment.status.'.$latest->status) }}</a><span class="block text-xs font-normal text-muted">{{ $latest->created_at?->diffForHumans() }}</span>@else{{ __('enrichment.panel.never') }}@endif
+                            </dd>
+                        </div>
+                    </dl>
+                </x-dash.panel>
+            @endunless @endcan
+
             {{-- Claims, verification, reports --}}
             <div class="grid gap-6 lg:grid-cols-2">
                 <x-dash.panel :title="__('admin.claims.title')" :padding="false">

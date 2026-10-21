@@ -26,6 +26,9 @@ use App\Policies\OfferPolicy;
 use App\Policies\ReviewPolicy;
 use App\Policies\UserPolicy;
 use App\Services\SettingsService;
+use App\Support\Enrichment\AiWriter;
+use App\Support\Enrichment\ClaudeAiWriter;
+use App\Support\Enrichment\NullAiWriter;
 use App\Support\Localization;
 use App\Support\Permissions;
 use App\Support\Search\PostgresBusinessSearch;
@@ -51,6 +54,10 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->bind(AiWriter::class, fn () => trim((string) config('services.anthropic.key')) !== ''
+            ? new ClaudeAiWriter
+            : new NullAiWriter);
+
         $this->app->singleton(SettingsService::class);
         $this->app->scoped(SeoMeta::class);
         $this->app->bind(BusinessSearchEngine::class, PostgresBusinessSearch::class);
