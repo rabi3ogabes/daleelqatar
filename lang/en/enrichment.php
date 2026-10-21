@@ -7,6 +7,7 @@ return [
     'review_title' => 'Review suggestions',
     'nothing_new' => 'No new details were found for this listing.',
     'applied' => 'The listing was updated with the approved details.',
+    'already_reviewed' => 'This suggestion was already handled (:status) — nothing was changed again.',
     'rejected' => 'The suggestions were rejected.',
     'place_changed' => 'Suggestions were refreshed for the place you chose.',
     'open' => 'Open',

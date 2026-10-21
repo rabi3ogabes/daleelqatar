@@ -54,13 +54,36 @@ document.addEventListener('submit', (e) => {
     });
 });
 
-// Prevent double submissions and show a busy state on submit buttons.
+// Prevent double submissions (double clicks, Enter pressed twice) and show a busy state.
+// Buttons without a type attribute submit too, so they are covered as well.
+const submitButtons = (form) => [
+    ...form.querySelectorAll('button:not([type]), button[type="submit"], input[type="submit"]'),
+    ...(form.id ? document.querySelectorAll(`button[form="${form.id}"]:not([type="button"])`) : []),
+].filter((btn) => !btn.hasAttribute('data-no-busy'));
+
 document.addEventListener('submit', (e) => {
     const form = e.target;
     if (!(form instanceof HTMLFormElement) || e.defaultPrevented) return;
-    form.querySelectorAll('button[type="submit"]:not([data-no-busy])').forEach((btn) => {
+    if (form.dataset.submitting) {
+        e.preventDefault();
+        return;
+    }
+    form.dataset.submitting = '1';
+    submitButtons(form).forEach((btn) => {
         btn.setAttribute('aria-busy', 'true');
         btn.disabled = true;
+    });
+});
+
+// Coming back with the browser's Back button restores the page from cache: re-enable its forms.
+window.addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    document.querySelectorAll('form[data-submitting]').forEach((form) => {
+        delete form.dataset.submitting;
+        submitButtons(form).forEach((btn) => {
+            btn.removeAttribute('aria-busy');
+            btn.disabled = false;
+        });
     });
 });
 

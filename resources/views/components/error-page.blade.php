@@ -1,7 +1,8 @@
 @props(['code', 'icon' => 'compass', 'minimal' => false])
 @php
-    $title = __('errors.'.$code.'_title');
-    $text = __('errors.'.$code.'_text');
+    $known = \Illuminate\Support\Facades\Lang::has('errors.'.$code.'_title');
+    $title = $known ? __('errors.'.$code.'_title') : __('errors.generic_title');
+    $text = $known ? __('errors.'.$code.'_text') : __('errors.generic_text');
 @endphp
 @if($minimal)
     {{-- Self-contained: no database access, safe when the application is failing --}}
@@ -45,6 +46,7 @@
                 <a href="{{ route('home') }}" class="btn btn-gold">{{ __('errors.go_home') }}</a>
                 @if($code == 401 || $code == 403)@guest<a href="{{ route('login') }}" class="btn btn-outline">{{ __('nav.login') }}</a>@endguest @endif
                 @if($code == 404)<a href="{{ route('categories.index') }}" class="btn btn-outline">{{ __('search.browse_categories') }}</a>@endif
+                @if(! in_array((int) $code, [401, 403, 404], true) && url()->previous() !== url()->current())<a href="{{ url()->previous() }}" class="btn btn-outline"><x-icon name="arrow-left" class="size-4" />{{ __('errors.go_back') }}</a>@endif
             </div>
         </section>
     </x-layouts.app>

@@ -15,6 +15,7 @@ use App\Support\Enrichment\WebsiteReader;
 use App\Support\Permissions;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class EnrichmentTest extends TestCase
@@ -240,6 +241,35 @@ class EnrichmentTest extends TestCase
         $this->assertSame('partial', $s->refresh()->status);
         $this->assertSame($admin->id, $s->reviewed_by);
         $this->assertTrue(AuditLog::query()->where('action', 'enrichment.applied')->exists());
+    }
+
+    public function test_a_repeated_approval_is_harmless_and_explained(): void
+    {
+        $admin = $this->makeUser(Permissions::ADMIN);
+        $business = $this->business();
+        $s = app(Enricher::class)->run($business);
+        $payload = ['apply' => ['name_ar' => 1], 'value' => ['name_ar' => 'مركز الأنصاري للأثاث']];
+
+        $this->actingAs($admin)->post(route('admin.enrichment.approve', $s), $payload)->assertRedirect(route('admin.enrichment.index'));
+        // The same form submitted again (double click / resubmission): no error, no second change.
+        $this->actingAs($admin)->post(route('admin.enrichment.approve', $s), ['apply' => ['name_ar' => 1], 'value' => ['name_ar' => 'اسم آخر']])
+            ->assertRedirect(route('admin.enrichment.show', $s))
+            ->assertSessionHas('info', __('enrichment.already_reviewed', ['status' => __('enrichment.status.partial')]));
+        $this->actingAs($admin)->post(route('admin.enrichment.reject', $s))->assertRedirect(route('admin.enrichment.show', $s));
+
+        $this->assertSame('مركز الأنصاري للأثاث', $business->refresh()->name_ar);
+        $this->assertSame('partial', $s->refresh()->status);
+        $this->assertSame(1, AuditLog::query()->where('action', 'enrichment.applied')->count());
+        $this->actingAs($admin)->get(route('admin.enrichment.show', $s))->assertOk();
+    }
+
+    public function test_unexpected_client_errors_show_a_branded_page(): void
+    {
+        Route::middleware('web')->get('/__conflict', fn () => abort(409));
+        Route::middleware('web')->get('/__teapot', fn () => abort(418));
+
+        $this->get('/__conflict')->assertStatus(409)->assertSee(__('errors.409_title'))->assertDontSee('Oops! An Error Occurred');
+        $this->get('/__teapot')->assertStatus(418)->assertSee(__('errors.generic_title'))->assertDontSee('Oops! An Error Occurred');
     }
 
     public function test_invalid_edits_are_rejected(): void

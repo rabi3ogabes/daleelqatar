@@ -133,6 +133,9 @@ class EnrichmentController extends Controller
 
     public function approve(Request $request, BusinessSuggestion $suggestion, SuggestionApplier $applier): RedirectResponse
     {
+        if (! $suggestion->isPending()) {
+            return $this->alreadyReviewed($request, $suggestion);
+        }
         $request->validate([
             'apply' => ['required', 'array', 'min:1'],
             'apply.*' => ['in:1'],
@@ -156,6 +159,9 @@ class EnrichmentController extends Controller
 
     public function reject(Request $request, BusinessSuggestion $suggestion, SuggestionApplier $applier): RedirectResponse
     {
+        if (! $suggestion->isPending()) {
+            return $this->alreadyReviewed($request, $suggestion);
+        }
         $applier->reject($suggestion, $request->user());
 
         return $this->afterReview($request, $suggestion, __('enrichment.rejected'));
@@ -164,13 +170,30 @@ class EnrichmentController extends Controller
     /** The admin picked a different Google Maps place for this listing. */
     public function place(Request $request, BusinessSuggestion $suggestion): RedirectResponse
     {
+        if (! $suggestion->isPending()) {
+            return $this->alreadyReviewed($request, $suggestion);
+        }
         $data = $request->validate(['place_id' => ['required', 'string', 'regex:/^[A-Za-z0-9_\-]{10,255}$/']]);
-        abort_unless($suggestion->isPending(), 409);
         $new = $this->enricher->run($suggestion->business, [], $data['place_id']);
 
         return $new->status === 'pending'
             ? redirect()->route('admin.enrichment.show', $new)->with('success', __('enrichment.place_changed'))
             : redirect()->route('admin.enrichment.index')->with('info', __('enrichment.nothing_new'));
+    }
+
+    /**
+     * A suggestion that was already approved, rejected or replaced — usually a
+     * double click or a resubmitted form. The first action stands; nothing changes.
+     */
+    private function alreadyReviewed(Request $request, BusinessSuggestion $suggestion): RedirectResponse
+    {
+        $message = __('enrichment.already_reviewed', ['status' => __('enrichment.status.'.$suggestion->status)]);
+        $next = $request->integer('next');
+        if ($next > 0 && BusinessSuggestion::query()->pending()->whereKey($next)->exists()) {
+            return redirect()->route('admin.enrichment.show', $next)->with('info', $message);
+        }
+
+        return redirect()->route('admin.enrichment.show', $suggestion)->with('info', $message);
     }
 
     private function afterReview(Request $request, BusinessSuggestion $suggestion, string $message): RedirectResponse
