@@ -40,7 +40,7 @@
             @endif
             @if($showMunicipality)
                 <x-form.select name="municipality" :label="__('search.municipality')" :placeholder="__('search.all_municipalities')" :value="$criteria->municipality?->slug"
-                    :options="$municipalities->mapWithKeys(fn ($m) => [$m->slug => $m->t('name')])->all()" onchange="this.form.area && (this.form.area.value = '')" />
+                    :options="$municipalities->mapWithKeys(fn ($m) => [$m->slug => $m->t('name')])->all()" x-data x-on:change="$el.form.area && ($el.form.area.value = '')" />
             @endif
             @if($areas->isNotEmpty())
                 <x-form.select name="area" :label="__('search.area')" :placeholder="__('search.all_areas')" :value="$criteria->area?->slug" :options="$areas->mapWithKeys(fn ($a) => [$a->slug => $a->t('name')])->all()" />
@@ -73,7 +73,7 @@
                     @foreach(\Illuminate\Support\Arr::except($query, ['sort']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     @if($layout === 'list')<input type="hidden" name="view" value="list">@endif
                     <label for="sort" class="hidden text-sm text-muted-strong sm:block">{{ __('common.sort_by') }}</label>
-                    <select id="sort" name="sort" class="select !w-auto !py-2 text-sm" onchange="this.form.requestSubmit()">
+                    <select id="sort" name="sort" class="select !w-auto !py-2 text-sm" x-data x-on:change="$el.form.requestSubmit()">
                         @foreach(['relevance', 'newest', 'popular', 'name'] as $sort)
                             <option value="{{ $sort }}" @selected($criteria->sort === $sort)>{{ __('search.sort_'.$sort) }}</option>
                         @endforeach

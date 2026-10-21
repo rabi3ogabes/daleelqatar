@@ -69,6 +69,8 @@ return [
     'image_requirements' => 'JPG, PNG or WebP, up to :size MB.',
     'document_requirements' => 'PDF, JPG or PNG, up to :size MB.',
     'choose_file' => 'Choose file',
+    'choose_files' => 'Choose files',
+    'no_file_chosen' => 'No file chosen',
     'upload' => 'Upload',
     'replace' => 'Replace',
     'char_count' => ':count characters',

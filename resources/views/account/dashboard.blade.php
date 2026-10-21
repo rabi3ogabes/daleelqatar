@@ -17,7 +17,7 @@
     </section>
 
     {{-- Stats (live data) --}}
-    <div class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <x-dash.stat :label="__('account.dashboard.stat_listings')" :value="$stats['listings']" icon="store" :sublabel="trans_choice('account.dashboard.stat_published', $stats['published'], ['count' => $stats['published']])" :href="route('account.businesses.index')" />
         <x-dash.stat :label="__('account.dashboard.stat_views')" :value="$stats['views']" icon="eye" :sublabel="__('account.dashboard.last_30')" />
         <x-dash.stat :label="__('account.dashboard.stat_interactions')" :value="$stats['interactions']" icon="mouse-pointer-click" :sublabel="__('account.dashboard.last_30')" />

@@ -14,9 +14,8 @@
             <x-form.textarea name="message" :label="__('claims.message')" rows="4" maxlength="2000" />
             <div>
                 <label for="f_proof" class="label">{{ __('claims.proof') }} <span class="font-normal text-muted">({{ __('common.optional') }})</span></label>
-                <input id="f_proof" type="file" name="proof" accept="application/pdf,image/jpeg,image/png" class="block w-full text-sm text-muted-strong file:me-4 file:rounded-xl file:border-0 file:bg-navy-900 file:px-4 file:py-2.5 file:text-sm file:font-semibold file:text-white hover:file:bg-navy-800">
+                <x-form.file name="proof" id="f_proof" accept="application/pdf,image/jpeg,image/png" />
                 <p class="hint">{{ __('claims.proof_hint') }} {{ __('common.document_requirements', ['size' => round((int) setting('uploads.max_document_kb', 8192) / 1024)]) }}</p>
-                @error('proof')<p class="error">{{ $message }}</p>@enderror
             </div>
             <x-form.checkbox name="terms" :label="__('claims.confirm_owner')" required />
             <button class="btn btn-primary btn-lg"><x-icon name="send" class="size-5" />{{ __('claims.submit') }}</button>

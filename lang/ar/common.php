@@ -69,6 +69,8 @@ return [
     'image_requirements' => 'JPG أو PNG أو WebP، بحد أقصى :size ميجابايت.',
     'document_requirements' => 'PDF أو JPG أو PNG، بحد أقصى :size ميجابايت.',
     'choose_file' => 'اختر ملفاً',
+    'choose_files' => 'اختر الملفات',
+    'no_file_chosen' => 'لم يتم اختيار ملف',
     'upload' => 'رفع',
     'replace' => 'استبدال',
     'char_count' => ':count حرف',

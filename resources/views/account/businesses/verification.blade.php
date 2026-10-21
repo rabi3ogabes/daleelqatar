@@ -6,9 +6,8 @@
             <x-form.input name="commercial_registration" dir="ltr" :label="__('account.verification.cr')" maxlength="60" />
             <div>
                 <label for="f_document" class="label">{{ __('account.verification.document') }} <span class="text-danger">*</span></label>
-                <input id="f_document" type="file" name="document" accept="application/pdf,image/jpeg,image/png" required class="block w-full rounded-xl border border-dashed border-navy-200 bg-navy-50/40 p-3 text-sm file:me-3 file:rounded-lg file:border-0 file:bg-navy-900 file:px-3 file:py-1.5 file:text-white">
+                <x-form.file name="document" id="f_document" accept="application/pdf,image/jpeg,image/png" required class="rounded-xl border border-dashed border-navy-200 bg-navy-50/40 p-3" />
                 <p class="hint">{{ __('account.verification.document_hint', ['types' => __('common.document_requirements', ['size' => round((int) setting('uploads.max_document_kb', 8192) / 1024)])]) }}</p>
-                @error('document')<p class="error">{{ $message }}</p>@enderror
             </div>
             <x-form.textarea name="notes" :label="__('account.verification.notes')" rows="3" maxlength="1000" />
             <button type="submit" class="btn btn-primary"><x-icon name="shield-check" class="size-4" />{{ __('account.verification.submit') }}</button>

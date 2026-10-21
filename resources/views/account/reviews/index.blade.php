@@ -3,7 +3,7 @@
         <x-slot:actions>
             <form method="GET" action="{{ route('account.reviews.index') }}">
                 <label for="rb" class="sr-only">{{ __('account.offers.business') }}</label>
-                <select id="rb" name="business" class="select w-56" onchange="this.form.submit()">
+                <select id="rb" name="business" class="select w-56" x-data x-on:change="$el.form.requestSubmit()">
                     <option value="">{{ __('account.reviews.filter_business') }}</option>
                     @foreach($businesses as $b)<option value="{{ $b->uuid }}" @selected($filter?->id === $b->id)>{{ $b->t('name') }}</option>@endforeach
                 </select>

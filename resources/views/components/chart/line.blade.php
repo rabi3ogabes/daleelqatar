@@ -27,7 +27,7 @@
                 <polyline points="{{ $points }}" fill="none" stroke="{{ $color }}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
             @endif
             @foreach($labels as $i => $label)
-                @if($i % $every === 0 || $i === $n - 1)
+                @if($i % $every === 0 || ($i === $n - 1 && ($n - 1) % $every >= $every / 2))
                     <text x="{{ $x($i) }}" y="{{ $H - 8 }}" text-anchor="middle" font-size="11" fill="#5F6672">{{ $label }}</text>
                 @endif
             @endforeach
