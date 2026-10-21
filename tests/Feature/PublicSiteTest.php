@@ -8,6 +8,7 @@ use App\Models\Business;
 use App\Models\Category;
 use App\Models\Municipality;
 use App\Models\Offer;
+use App\Models\Page;
 use Tests\TestCase;
 
 class PublicSiteTest extends TestCase
@@ -92,7 +93,8 @@ class PublicSiteTest extends TestCase
         $b = $this->business(['name_en' => 'Quiet Shop', 'phone' => null, 'email' => null, 'website' => null, 'whatsapp' => null]);
         $this->get('/en/business/'.$b->slug)->assertOk()
             ->assertDontSee('aggregateRating', false)
-            ->assertSee(__('business.no_contact', [], 'en'));
+            ->assertSee(__('directory.na', [], 'en'))
+            ->assertDontSee(__('directory.press_to_view', [], 'en'));
     }
 
     public function test_listing_report_and_contact_message_are_stored(): void
@@ -169,6 +171,12 @@ class PublicSiteTest extends TestCase
 
         $this->get('/sitemap.xml')->assertOk()
             ->assertHeader('Content-Type', 'application/xml; charset=UTF-8')
+            ->assertSee('<sitemapindex', false)
+            ->assertSee(url('/sitemaps/pages.xml'), false)
+            ->assertSee(url('/sitemaps/businesses-1.xml'), false);
+
+        $this->get('/sitemaps/businesses-1.xml')->assertOk()
+            ->assertHeader('Content-Type', 'application/xml; charset=UTF-8')
             ->assertSee(url('/business/real-live-biz'), false)
             ->assertSee(url('/en/business/real-live-biz'), false)
             ->assertSee('hreflang="en"', false)
@@ -179,10 +187,12 @@ class PublicSiteTest extends TestCase
     {
         $this->business(['is_demo' => false, 'slug' => 'well-formed-biz']);
 
-        $xml = $this->get('/sitemap.xml')->assertOk()->getContent();
-
-        $this->assertStringStartsWith('<?xml version="1.0" encoding="UTF-8"?>', $xml);
-        $this->assertNotFalse(simplexml_load_string($xml), 'The sitemap must parse as XML.');
+        foreach (['/sitemap.xml', '/sitemaps/pages.xml', '/sitemaps/taxonomy.xml', '/sitemaps/businesses-1.xml'] as $path) {
+            $xml = $this->get($path)->assertOk()->getContent();
+            $this->assertStringStartsWith('<?xml version="1.0" encoding="UTF-8"?>', $xml);
+            $this->assertNotFalse(simplexml_load_string($xml), "$path must parse as XML.");
+        }
+        $this->get('/sitemaps/businesses-9.xml')->assertNotFound();
     }
 
     public function test_robots_blocks_everything_outside_production(): void
@@ -206,7 +216,7 @@ class PublicSiteTest extends TestCase
 
     public function test_static_pages_render_markdown_safely(): void
     {
-        \App\Models\Page::query()->where('slug', 'about')->update(['body_en' => "Hello <script>alert(1)</script> **bold**"]);
+        Page::query()->where('slug', 'about')->update(['body_en' => 'Hello <script>alert(1)</script> **bold**']);
         $this->get('/en/about')->assertOk()->assertSee('<strong>bold</strong>', false)->assertDontSee('<script>alert(1)</script>', false);
     }
 }

@@ -7,9 +7,9 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Page;
 use App\Services\AuditLogger;
+use App\Support\Sitemap;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 class PageController extends Controller
@@ -43,7 +43,7 @@ class PageController extends Controller
         $page->updated_by = $request->user()->id;
         $page->save();
         $audit->logChanges('page.updated', $page, $original);
-        Cache::forget('sitemap.xml');
+        Sitemap::flush();
 
         return redirect()->route('admin.pages.index')->with('success', __('common.updated'));
     }

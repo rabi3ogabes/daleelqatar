@@ -6,8 +6,8 @@
         ['categories.index', __('nav.categories'), 'categories.*'],
         ['search', __('nav.explore'), 'search'],
         ['locations.index', __('nav.locations'), 'locations.*'],
+        ['map', __('directory.map.nav'), 'map'],
         ['offers.index', __('nav.offers'), 'offers.*'],
-        ['about', __('nav.about'), 'about'],
         ['contact', __('nav.contact'), 'contact'],
     ];
 @endphp

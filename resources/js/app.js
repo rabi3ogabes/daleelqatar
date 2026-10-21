@@ -137,6 +137,10 @@ Alpine.data('favorite', (url, initial, loginUrl) => ({
 /* Contact interaction tracking (call, WhatsApp, website, directions, share) */
 window.dqTrack = (url, type) => beacon(url, { type });
 
+// Profile views are counted with a beacon so CDN-cached pages are counted too (crawlers do not run it).
+const viewBeacon = document.querySelector('[data-view-beacon]');
+if (viewBeacon) beacon(viewBeacon.dataset.viewBeacon);
+
 /* Share profile ------------------------------------------------------------- */
 Alpine.data('share', (url, title, copiedMessage, trackUrl) => ({
     async share() {
@@ -151,6 +155,98 @@ Alpine.data('share', (url, title, copiedMessage, trackUrl) => ({
         }
         await navigator.clipboard?.writeText(url);
         Alpine.store('toast').show(copiedMessage);
+    },
+}));
+
+/* Hidden contact details: fetched only when the visitor presses "Press to view" */
+Alpine.data('reveal', (url) => ({
+    items: null,
+    shown: false,
+    loading: false,
+    async load() {
+        if (this.items || this.loading) return this.items;
+        this.loading = true;
+        try {
+            const res = await fetch(url, { headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' });
+            if (res.status === 429) {
+                Alpine.store('toast').show(document.documentElement.dataset.revealLimit || 'Too many requests', 'error');
+                return null;
+            }
+            if (res.ok) this.items = (await res.json()).items || [];
+        } finally {
+            this.loading = false;
+        }
+        return this.items;
+    },
+    async toggle() {
+        if (this.shown) {
+            this.shown = false;
+            return;
+        }
+        await this.load();
+        this.shown = !!this.items;
+    },
+    async copy(value) {
+        await navigator.clipboard?.writeText(value);
+        Alpine.store('toast').show(document.documentElement.dataset.copied || 'Copied');
+    },
+}));
+
+/* Share menu: WhatsApp, Facebook, Messenger, X, Instagram, Telegram, LinkedIn, e-mail */
+Alpine.data('shareMenu', (cfg) => ({
+    open: false,
+    copiedNow: false,
+    canNative: typeof navigator !== 'undefined' && !!navigator.share,
+    get isMobile() {
+        return /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+    },
+    toggle() {
+        this.open = !this.open;
+    },
+    sent() {
+        if (cfg.trackUrl) beacon(cfg.trackUrl, { type: 'share' });
+        this.open = false;
+    },
+    async copy(message = cfg.copied) {
+        try {
+            await navigator.clipboard.writeText(cfg.url);
+        } catch (_) {
+            const ta = Object.assign(document.createElement('textarea'), { value: cfg.url });
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+        }
+        this.copiedNow = true;
+        setTimeout(() => (this.copiedNow = false), 2500);
+        Alpine.store('toast').show(message);
+    },
+    async native() {
+        try {
+            await navigator.share({ title: cfg.title, text: cfg.text, url: cfg.url });
+            this.sent();
+        } catch (_) {
+            /* cancelled */
+        }
+    },
+    messenger() {
+        const link = encodeURIComponent(cfg.url);
+        if (this.isMobile) {
+            window.location.href = `fb-messenger://share/?link=${link}`;
+        } else if (cfg.fbAppId) {
+            window.open(`https://www.facebook.com/dialog/send?app_id=${encodeURIComponent(cfg.fbAppId)}&link=${link}&redirect_uri=${link}`, '_blank', 'noopener,width=640,height=560');
+        } else if (this.canNative) {
+            return this.native();
+        } else {
+            return this.copy(cfg.messenger).then(() => this.sent());
+        }
+        this.sent();
+    },
+    async instagram() {
+        // Instagram has no web share link: use the phone's share sheet, otherwise copy the link.
+        if (this.canNative) return this.native();
+        await this.copy(cfg.instagram);
+        this.sent();
     },
 }));
 
@@ -215,6 +311,129 @@ Alpine.data('tabs', (first) => ({
     set(t) {
         this.tab = t;
         history.replaceState(null, '', '#' + t);
+    },
+}));
+
+/* Admin: spreadsheet upload (direct to storage when available) ------------- */
+Alpine.data('importUploader', (signUrl, direct, maxMb, messages) => ({
+    file: null,
+    source: '',
+    over: false,
+    busy: false,
+    progress: 0,
+    error: '',
+    accept(file) {
+        this.error = '';
+        if (!file) return false;
+        if (!/\.(xlsx|csv|tsv|txt)$/i.test(file.name)) {
+            this.error = messages.type;
+            return false;
+        }
+        if (file.size > maxMb * 1048576) {
+            this.error = messages.too_big;
+            return false;
+        }
+        this.file = file;
+        if (!this.source) this.source = file.name.replace(/\.[^.]+$/, '').replace(/^[0-9a-f]{8}-/i, '').replace(/[_-]+/g, ' ').trim();
+        return true;
+    },
+    pick(e) {
+        this.accept(e.target.files?.[0]);
+    },
+    drop(e) {
+        this.over = false;
+        const file = e.dataTransfer?.files?.[0];
+        if (this.accept(file)) {
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            this.$refs.input.files = dt.files;
+        }
+    },
+    async submit(e) {
+        if (!this.file) {
+            e.preventDefault();
+            return;
+        }
+        if (!direct) {
+            this.busy = true;
+            this.progress = 100;
+            return; // regular multipart form submit
+        }
+        e.preventDefault();
+        this.busy = true;
+        this.progress = 0;
+        try {
+            const sign = await postJson(signUrl, { name: this.file.name, size: this.file.size, source_name: this.source });
+            await new Promise((resolve, reject) => {
+                const body = new FormData();
+                body.append('cacheControl', '3600');
+                body.append('', this.file);
+                const xhr = new XMLHttpRequest();
+                xhr.open('PUT', sign.upload_url);
+                xhr.upload.onprogress = (ev) => ev.lengthComputable && (this.progress = Math.round((ev.loaded / ev.total) * 100));
+                xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(messages.failed)));
+                xhr.onerror = () => reject(new Error(messages.failed));
+                xhr.send(body);
+            });
+            const done = await postJson(sign.complete_url);
+            window.location.href = done.redirect;
+        } catch (err) {
+            this.error = err.data?.message || err.message || messages.failed;
+            if (err.data?.redirect) window.location.href = err.data.redirect;
+            this.busy = false;
+        }
+    },
+}));
+
+/* Admin: column mapping preview + chunked import runner ---------------------- */
+Alpine.data('importRunner', (processUrl, initial, config = {}) => ({
+    p: initial,
+    busy: false,
+    error: '',
+    mapping: Object.fromEntries(Object.keys(config.labels || {}).map((k) => [k, config.mapping?.[k] !== undefined ? String(config.mapping[k]) : ''])),
+    samples: config.samples || [],
+    get previewFields() {
+        return Object.entries(config.labels || {})
+            .filter(([key]) => this.mapping[key] !== '' && this.mapping[key] !== undefined)
+            .map(([key, label]) => ({ key, label }));
+    },
+    cell(row, key) {
+        const i = Number(this.mapping[key]);
+        return Number.isInteger(i) ? (row[i] ?? '') : '';
+    },
+    async start(form) {
+        this.busy = true;
+        this.error = '';
+        try {
+            const res = await fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.message || Object.values(data.errors || {})[0]?.[0] || res.statusText);
+            window.location.href = data.redirect;
+        } catch (err) {
+            this.error = err.message;
+            this.busy = false;
+        }
+    },
+    async run() {
+        let failures = 0;
+        while (!this.p.done) {
+            try {
+                this.p = await postJson(processUrl);
+                failures = 0;
+                this.error = '';
+            } catch (err) {
+                failures += 1;
+                this.error = err.message;
+                if (failures >= 6) return;
+                await new Promise((r) => setTimeout(r, 2500 * failures));
+            }
+        }
+        window.location.href = this.p.redirect;
     },
 }));
 

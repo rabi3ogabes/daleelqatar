@@ -16,4 +16,7 @@ return [
         'business-owner' => 'Business owner',
         'user' => 'Registered user',
     ],
+    'version' => 'Version',
+    'last_update' => 'Last update',
+    'qatar_time' => 'Qatar time',
 ];

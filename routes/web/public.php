@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Web\AzController;
 use App\Http\Controllers\Web\BusinessController;
 use App\Http\Controllers\Web\CategoryController;
 use App\Http\Controllers\Web\ClaimController;
@@ -7,6 +8,7 @@ use App\Http\Controllers\Web\ContactController;
 use App\Http\Controllers\Web\FavoriteController;
 use App\Http\Controllers\Web\HomeController;
 use App\Http\Controllers\Web\LocationController;
+use App\Http\Controllers\Web\MapController;
 use App\Http\Controllers\Web\OfferController;
 use App\Http\Controllers\Web\PageController;
 use App\Http\Controllers\Web\ReportController;
@@ -26,9 +28,17 @@ Route::get('/categories/{category:slug}', [CategoryController::class, 'show'])->
 Route::get('/locations', [LocationController::class, 'index'])->name('locations.index');
 Route::get('/locations/{municipality:slug}', [LocationController::class, 'show'])->name('locations.show');
 
+Route::get('/map', [MapController::class, 'index'])->name('map');
+Route::get('/map/data.json', [MapController::class, 'data'])->name('map.data');
+
+Route::get('/directory', [AzController::class, 'index'])->name('directory.az');
+Route::get('/directory/{letter}', [AzController::class, 'letter'])->name('directory.az.letter');
+
 Route::get('/featured', [BusinessController::class, 'featured'])->name('businesses.featured');
 Route::get('/latest', [BusinessController::class, 'latest'])->name('businesses.latest');
 Route::get('/business/{business:slug}', [BusinessController::class, 'show'])->name('business.show');
+Route::get('/business/{business:slug}/reveal/{type}', [BusinessController::class, 'reveal'])->whereIn('type', ['phone', 'whatsapp', 'email'])->middleware('throttle:reveal')->name('business.reveal');
+Route::post('/business/{business:slug}/viewed', [BusinessController::class, 'viewed'])->middleware('throttle:interactions')->name('business.viewed');
 Route::post('/business/{business:slug}/track', [BusinessController::class, 'track'])->middleware('throttle:interactions')->name('business.track');
 Route::post('/business/{business:slug}/report', [ReportController::class, 'store'])->middleware('throttle:submissions')->name('business.report');
 

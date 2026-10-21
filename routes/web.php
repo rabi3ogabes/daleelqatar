@@ -10,11 +10,18 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 Route::get('/sitemap.xml', [SeoController::class, 'sitemap'])->name('sitemap');
+Route::get('/sitemaps/{part}.xml', [SeoController::class, 'sitemapPart'])->where('part', 'pages|taxonomy|offers|businesses-[0-9]+')->name('sitemap.part');
+Route::get('/ads.txt', [SeoController::class, 'adsTxt'])->name('ads.txt');
+Route::get('/indexnow.txt', [SeoController::class, 'indexNowKey'])->name('indexnow.key');
+Route::get('/csrf-token', [SeoController::class, 'csrfToken'])->middleware('throttle:60,1')->name('csrf.token');
 Route::get('/robots.txt', [SeoController::class, 'robots'])->name('robots');
 Route::get('/manifest.webmanifest', [SeoController::class, 'manifest'])->name('manifest');
 Route::get('/cron/maintenance', [CronController::class, 'maintenance'])
     ->middleware('throttle:10,1')
     ->name('cron.maintenance');
+Route::get('/cron/discovery', [CronController::class, 'discovery'])
+    ->middleware('throttle:10,1')
+    ->name('cron.discovery');
 
 /*
 |--------------------------------------------------------------------------

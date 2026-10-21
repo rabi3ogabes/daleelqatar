@@ -53,5 +53,7 @@ return [
         'directions' => 'Directions',
         'share' => 'Share',
         'offer_view' => 'Offer view',
+        'phone_reveal' => 'Phone revealed',
+        'email_reveal' => 'E-mail revealed',
     ],
 ];

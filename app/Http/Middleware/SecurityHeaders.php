@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Support\Integrations;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Vite;
@@ -39,22 +40,34 @@ class SecurityHeaders
     private function csp(): string
     {
         $nonce = Vite::cspNonce();
-        $storage = rtrim((string) config('filesystems.disks.supabase.url'), '/');
+        $storage = $this->origin((string) config('filesystems.disks.supabase.url'));
+        // Google Analytics and AdSense load further scripts, frames and beacons from many Google hosts.
+        // 'strict-dynamic' lets the nonced loaders do that while inline scripts without a nonce stay blocked.
+        $google = Integrations::ga4() !== null || Integrations::adsenseClient() !== null;
 
         return implode('; ', array_filter([
             "default-src 'self'",
             // Alpine.js evaluates directive expressions, which requires 'unsafe-eval'.
-            "script-src 'self' 'nonce-{$nonce}' 'unsafe-eval'",
+            "script-src 'self' 'nonce-{$nonce}' 'strict-dynamic' 'unsafe-eval' https:",
             "style-src 'self' 'unsafe-inline'",
-            "img-src 'self' data: blob: ".($storage ?: '').' https://*.tile.openstreetmap.org',
+            // Map tiles (CARTO/OpenStreetMap), media and ad creatives.
+            "img-src 'self' data: blob: https:",
             "font-src 'self' data:",
-            "connect-src 'self'",
-            'frame-src https://www.openstreetmap.org',
+            // Direct-to-storage spreadsheet uploads go to the Supabase Storage origin.
+            "connect-src 'self' ".$storage.($google ? ' https:' : ''),
+            'frame-src https://www.openstreetmap.org'.($google ? ' https:' : ''),
             "frame-ancestors 'self'",
             "form-action 'self'",
             "base-uri 'self'",
             "object-src 'none'",
             'upgrade-insecure-requests',
         ]));
+    }
+
+    private function origin(string $url): string
+    {
+        $parts = parse_url($url);
+
+        return isset($parts['scheme'], $parts['host']) ? $parts['scheme'].'://'.$parts['host'].(isset($parts['port']) ? ':'.$parts['port'] : '') : '';
     }
 }

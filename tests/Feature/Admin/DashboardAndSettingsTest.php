@@ -93,4 +93,20 @@ class DashboardAndSettingsTest extends AdminTestCase
         $this->get('/en')->assertOk()->assertSee('A brand new headline');
         $this->get('/')->assertOk()->assertSee('عنوان جديد للواجهة');
     }
+
+    public function test_admin_footer_shows_the_deployed_version_and_update_time(): void
+    {
+        $path = public_path('build/build-info.json');
+        $original = is_file($path) ? file_get_contents($path) : null;
+        @mkdir(dirname($path), 0755, true);
+        file_put_contents($path, json_encode(['version' => '9.8.7', 'commit' => 'abcdef1234567890abcdef1234567890abcdef12', 'committed_at' => '2026-10-21T19:44:07+00:00']));
+
+        try {
+            $this->actingAs($this->admin())->get('/en/admin')->assertOk()
+                ->assertSee('v9.8.7')->assertSee('abcdef1')
+                ->assertSee('2026-10-21 22:44')->assertSee('Last update');
+        } finally {
+            $original === null ? @unlink($path) : file_put_contents($path, $original);
+        }
+    }
 }

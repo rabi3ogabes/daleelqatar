@@ -49,6 +49,7 @@ final class Directory
         foreach (['dir.category_counts', 'dir.municipality_counts', 'home.stats', 'home.featured_areas'] as $key) {
             Cache::forget($key);
         }
+        AzIndex::flush();
     }
 
     /** @return list<int> IDs of the signed-in user's favourite businesses. */

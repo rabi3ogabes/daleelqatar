@@ -30,6 +30,7 @@ $defaults = [
     // Local disks do not survive between invocations: store media in Supabase.
     'MEDIA_DISK' => 'supabase',
     'PRIVATE_MEDIA_DISK' => 'supabase_private',
+    'IMPORTS_DISK' => 'supabase_imports',
     'DB_SSLMODE' => 'require',
     'DB_SEARCH_PATH' => 'daleel,extensions,public',
 ];

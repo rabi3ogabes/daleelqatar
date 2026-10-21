@@ -114,4 +114,17 @@ return [
 
     'prefix' => env('CACHE_PREFIX', Str::slug((string) env('APP_NAME', 'laravel')).'-cache-'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | CDN (edge) caching of public pages
+    |--------------------------------------------------------------------------
+    | Public pages rendered for cookie-less visitors (first visits, crawlers)
+    | are served from the CDN. ttl_factor scales every page lifetime.
+    */
+
+    'edge' => [
+        'enabled' => (bool) env('EDGE_CACHE', env('APP_ENV') === 'production'),
+        'ttl_factor' => (float) env('EDGE_CACHE_TTL_FACTOR', 1),
+    ],
+
 ];

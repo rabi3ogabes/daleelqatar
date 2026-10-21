@@ -16,4 +16,7 @@ return [
         'business-owner' => 'صاحب نشاط تجاري',
         'user' => 'مستخدم مسجل',
     ],
+    'version' => 'الإصدار',
+    'last_update' => 'آخر تحديث',
+    'qatar_time' => 'بتوقيت قطر',
 ];

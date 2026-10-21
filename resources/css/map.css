@@ -1,0 +1,94 @@
+/* Daleel Qatar map: navy & gold pins, clusters and popups. */
+.dq-pin {
+    background: none;
+    border: 0;
+}
+.dq-pin__dot {
+    position: relative;
+    display: block;
+    width: 30px;
+    height: 30px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    background: linear-gradient(135deg, #f1dfb1, #c9a35e);
+    border: 3px solid #101c32;
+    box-shadow: 0 6px 14px rgb(16 28 50 / 0.35);
+}
+.dq-pin__dot::after {
+    content: '';
+    position: absolute;
+    inset: 7px;
+    border-radius: 50%;
+    background: #101c32;
+}
+.dq-cluster {
+    background: none;
+    border: 0;
+}
+.dq-cluster span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 9999px;
+    font: 700 12px/1 system-ui, sans-serif;
+    color: #f1dfb1;
+    background: #101c32;
+    border: 3px solid #d7b875;
+    box-shadow: 0 0 0 6px rgb(215 184 117 / 0.25), 0 8px 18px rgb(16 28 50 / 0.3);
+}
+.dq-cluster--md span {
+    width: 50px;
+    height: 50px;
+    margin: -3px;
+}
+.dq-cluster--lg span {
+    width: 58px;
+    height: 58px;
+    margin: -7px;
+    font-size: 13px;
+}
+.leaflet-popup-content-wrapper {
+    border-radius: 16px;
+    box-shadow: 0 16px 40px rgb(16 28 50 / 0.18);
+}
+.leaflet-popup-content {
+    margin: 14px 16px;
+}
+.dq-popup__cat {
+    margin: 0 0 2px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #a8843f;
+}
+.dq-popup__title {
+    display: block;
+    font-size: 15px;
+    font-weight: 700;
+    color: #101c32 !important;
+    text-decoration: none;
+}
+.dq-popup__loc {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: #5b6478;
+}
+.dq-popup__cta {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 6px 12px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #f1dfb1 !important;
+    background: #101c32;
+    text-decoration: none;
+}
+.leaflet-container {
+    font-family: inherit;
+    background: #eef1f5;
+}
+[dir='rtl'] .leaflet-popup-content {
+    text-align: right;
+}

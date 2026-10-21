@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Http\Controllers\SeoController;
+use App\Support\Sitemap;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Cache;
 
 class WarmSitemapCommand extends Command
 {
@@ -22,10 +21,8 @@ class WarmSitemapCommand extends Command
             return self::SUCCESS;
         }
 
-        Cache::forget('sitemap.xml');
-        $response = app(SeoController::class)->sitemap();
-        $urls = substr_count((string) $response->getContent(), '<url>');
-        $this->info("✔ Sitemap cached with {$urls} URLs.");
+        $urls = Sitemap::warm();
+        $this->info('✔ Sitemap cached with '.$urls.' URLs in '.count(Sitemap::parts()).' files.');
 
         return self::SUCCESS;
     }
