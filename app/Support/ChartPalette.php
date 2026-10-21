@@ -32,7 +32,7 @@ final class ChartPalette
         $mag = 10 ** floor(log10($raw));
         $norm = $raw / $mag;
         $step = ($norm <= 1 ? 1 : ($norm <= 2 ? 2 : ($norm <= 2.5 ? 2.5 : ($norm <= 5 ? 5 : 10)))) * $mag;
-        $step = max(1, $step);
+        $step = max(1.0, (float) $step);
 
         return [ceil($max / $step) * $step, $step];
     }
