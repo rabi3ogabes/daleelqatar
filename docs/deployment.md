@@ -4,8 +4,8 @@
 
 | Item | Value |
 |---|---|
-| Project | `daleelqatar` — ref `uunuojnapwrehvrtozos` (region `ap-south-1`, PostgreSQL 17, free plan) |
-| Project URL | `https://uunuojnapwrehvrtozos.supabase.co` |
+| Project | ref `dbgzxsffvmdoxuytfqkz` (region `ap-northeast-1` / Tokyo, PostgreSQL 17) — the production database |
+| Project URL | `https://dbgzxsffvmdoxuytfqkz.supabase.co` |
 | Application schema | `daleel` — all 41 tables, 119 indexes, 51 foreign keys (identical to `php artisan migrate`) |
 | Extension | `pg_trgm` in schema `extensions` |
 | Reference data | roles & permissions, 8 municipalities, 61 areas, 77 categories, pages, FAQs, Laravel `migrations` history |
@@ -13,21 +13,20 @@
 | Storage buckets | `daleel-public` (public; webp/jpeg/png; 10 MB) and `daleel-private` (private; pdf/jpeg/png; 10 MB) |
 | Security advisor | 0 findings after provisioning |
 
-> A row named "Deployment probe (safe to delete)" (slug `__probe__`, soft-deleted, archived) was left by the
-> post-deployment search check because hard deletes through the connector need interactive approval. Remove it
-> in the Supabase SQL editor: `delete from daleel.businesses where slug = '__probe__';`
+> An earlier staging copy (`daleelqatar`, ref `uunuojnapwrehvrtozos`, `ap-south-1`) was provisioned the same way and is
+> not used by production.
 
 ### Credentials you need from the Supabase dashboard (never commit them)
 1. **Database password** — *Project Settings → Database*. Reset it there if you do not have it.
-2. **Connection string** — *Connect* button. Use the **direct** connection (`db.uunuojnapwrehvrtozos.supabase.co:5432`)
-   if your server has IPv6, otherwise the **session pooler** (`aws-*-ap-south-1.pooler.supabase.com:5432`, user
-   `postgres.uunuojnapwrehvrtozos`). Only if you must use the *transaction* pooler (port 6543) set `DB_EMULATE_PREPARES=true`.
+2. **Connection string** — *Connect* button. Use the **direct** connection (`db.dbgzxsffvmdoxuytfqkz.supabase.co:5432`)
+   if your server has IPv6, otherwise the **session pooler** (`aws-0-ap-northeast-1.pooler.supabase.com:5432`, user
+   `postgres.dbgzxsffvmdoxuytfqkz`). Only if you must use the *transaction* pooler (port 6543) set `DB_EMULATE_PREPARES=true`.
 3. **Service-role key** — *Project Settings → API Keys* (secret key). Server-side only: it goes in `SUPABASE_SERVICE_ROLE_KEY`
    and is used exclusively by `App\Support\Storage\SupabaseStorageAdapter`. It is never rendered to HTML/JS or returned by the API.
 
 ```dotenv
 DB_CONNECTION=pgsql
-DB_HOST=db.uunuojnapwrehvrtozos.supabase.co
+DB_HOST=db.dbgzxsffvmdoxuytfqkz.supabase.co
 DB_PORT=5432
 DB_DATABASE=postgres
 DB_USERNAME=postgres
@@ -37,7 +36,7 @@ DB_SEARCH_PATH=daleel,extensions,public
 
 MEDIA_DISK=supabase
 PRIVATE_MEDIA_DISK=supabase_private
-SUPABASE_URL=https://uunuojnapwrehvrtozos.supabase.co
+SUPABASE_URL=https://dbgzxsffvmdoxuytfqkz.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<secret key>
 ```
 
@@ -70,12 +69,12 @@ to one PHP function, `api/index.php`, built with the community runtime
 | `APP_KEY` | `base64:…` | `php artisan key:generate --show`. Mark it *Sensitive*. Changing it logs everyone out. |
 | `CRON_SECRET` | random string (16+ characters) | Vercel sends it to the cron endpoint automatically. *Sensitive*, Production. |
 | `APP_URL` | `https://daleelqatar.com` | Optional. Defaults to the production `*.vercel.app` URL. |
-| `DB_HOST` | `aws-?-ap-south-1.pooler.supabase.com` | Copy it from Supabase → **Connect** → *Session pooler*. Vercel has no IPv6, so use the session pooler (port 5432), **not** `db.<ref>.supabase.co`. Do not use the transaction pooler: it drops the per-session `search_path`. |
+| `DB_HOST` | `aws-0-ap-northeast-1.pooler.supabase.com` | The **host name only**, not the whole `postgresql://…` connection string. Take it from Supabase → **Connect** → *Session pooler*. Vercel has no IPv6, so use the session pooler (port 5432), **not** `db.<ref>.supabase.co`. Do not use the transaction pooler: it drops the per-session `search_path`. |
 | `DB_PORT` | `5432` | |
 | `DB_DATABASE` | `postgres` | |
-| `DB_USERNAME` | `postgres.uunuojnapwrehvrtozos` | Pooler user name: the `postgres.` prefix and the project ref. |
+| `DB_USERNAME` | `postgres.dbgzxsffvmdoxuytfqkz` | Pooler user name: the `postgres.` prefix and the project ref. |
 | `DB_PASSWORD` | database password | *Sensitive*. |
-| `SUPABASE_URL` | `https://uunuojnapwrehvrtozos.supabase.co` | |
+| `SUPABASE_URL` | `https://dbgzxsffvmdoxuytfqkz.supabase.co` | |
 | `SUPABASE_SERVICE_ROLE_KEY` | secret key | *Sensitive*. Server-side only (Storage uploads and signed URLs). |
 | `MAIL_*` | your mail provider | Optional until email delivery is needed. The default `log` mailer writes mail to the function logs. |
 
@@ -83,8 +82,8 @@ to one PHP function, `api/index.php`, built with the community runtime
 `PRIVATE_MEDIA_DISK=supabase_private` are already the defaults on Vercel.
 
 ### Function region
-Set **Project → Settings → Functions → Region** to **Mumbai (`bom1`)**, next to the Supabase project in
-`ap-south-1`. Every page makes several database round trips, so a cross-continent region adds most of the response time.
+Set **Project → Settings → Functions → Region** to **Tokyo (`hnd1`)**, next to the Supabase project in
+`ap-northeast-1`. Every page makes several database round trips, so a cross-continent region adds most of the response time.
 
 ### Deploying
 Pushes to the production branch deploy to production; other branches get preview deployments. Migrations do not run

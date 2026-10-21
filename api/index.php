@@ -19,6 +19,9 @@ $defaults = [
     'APP_ROUTES_CACHE' => '/tmp/bootstrap/routes.php',
     'APP_SERVICES_CACHE' => '/tmp/bootstrap/services.php',
     'LOG_CHANNEL' => 'stderr',
+    // One line per entry, without stack traces: Vercel truncates long log
+    // entries, which would otherwise cut off the error message itself.
+    'LOG_STDERR_FORMATTER' => 'Monolog\\Formatter\\LineFormatter',
     // No background worker exists on Vercel: run queued work inline.
     'QUEUE_CONNECTION' => 'sync',
     'SESSION_DRIVER' => 'database',
