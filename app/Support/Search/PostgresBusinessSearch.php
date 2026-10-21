@@ -17,7 +17,7 @@ final class PostgresBusinessSearch implements BusinessSearchEngine
         $query = Business::query()
             ->published()
             ->select('businesses.*')
-            ->with(['category:id,name_ar,name_en,slug,icon', 'municipality:id,name_ar,name_en,slug', 'area:id,name_ar,name_en,slug,municipality_id', 'images' => fn ($q) => $q->limit(1)]);
+            ->with(['category:id,name_ar,name_en,slug,icon', 'municipality:id,name_ar,name_en,slug', 'area:id,name_ar,name_en,slug,municipality_id', 'images' => fn ($q) => $q->limit(1), 'openingHours']);
 
         $tsQuery = null;
         $normalized = null;

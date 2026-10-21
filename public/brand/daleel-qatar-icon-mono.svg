@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-labelledby="t">
+<title id="t">Daleel Qatar — دليل قطر</title>
+<defs>
+  
+  
+  <clipPath id="dq-m" clipPathUnits="userSpaceOnUse">
+    <path d="M0 0 H120 V80 L116 80.5 C 62 106.5, 32 76.5, 4 93.5 L0 96 Z"/>
+  </clipPath></defs><g style="color:#101C32">
+  <g clip-path="url(#dq-m)">
+    <path d="M18 8 H56 C88 8 110 30 110 60 C110 90 88 112 56 112 H18 Z M33 23 H56 C79 23 95 39 95 60 C95 81 79 97 56 97 H33 Z" fill-rule="evenodd" fill="currentColor"/>
+    <path d="M38 100 V66 H45 V100 Z M48 100 V50 L52.5 38 L57 50 V100 Z M60 100 V46 C60 39.5 70 39.5 70 46 V100 Z M64.4 40.6 L65 33 L65.6 40.6 Z M73 96 C75.5 84 75.5 72 73 60 H81 C78.5 72 78.5 84 81 96 Z M84 100 V72 H89 V100 Z" fill="currentColor"/>
+  </g>
+  <path d="M4 101 C 32 84, 62 114, 116 88" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+  <path d="M16 112 C 40 101, 66 120, 104 106" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" opacity="0.7"/></g>
+</svg>

@@ -131,3 +131,10 @@ if (! function_exists('safe_external_url')) {
         return in_array($scheme, ['http', 'https'], true) && filter_var($url, FILTER_VALIDATE_URL) ? $url : null;
     }
 }
+
+if (! function_exists('seo')) {
+    function seo(): \App\Support\SeoMeta
+    {
+        return app(\App\Support\SeoMeta::class);
+    }
+}

@@ -38,6 +38,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(SettingsService::class);
+        $this->app->scoped(\App\Support\SeoMeta::class);
         $this->app->bind(BusinessSearchEngine::class, PostgresBusinessSearch::class);
     }
 
