@@ -22,6 +22,9 @@ return [
     'media_disk' => env('MEDIA_DISK', 'public'),
     'private_media_disk' => env('PRIVATE_MEDIA_DISK', 'local'),
 
+    // Uploaded spreadsheets waiting to be imported (Supabase in production: browsers upload directly).
+    'imports_disk' => env('IMPORTS_DISK', 'local'),
+
     /*
     |--------------------------------------------------------------------------
     | Filesystem Disks
@@ -72,6 +75,17 @@ return [
             'url' => env('SUPABASE_URL'),
             'key' => env('SUPABASE_SERVICE_ROLE_KEY'),
             'bucket' => env('SUPABASE_PRIVATE_BUCKET', 'daleel-private'),
+            'public' => false,
+            'signed_url_ttl' => (int) env('SUPABASE_SIGNED_URL_TTL', 600),
+            'throw' => true,
+        ],
+
+        // Supabase Storage — private bucket for spreadsheet imports (admins only).
+        'supabase_imports' => [
+            'driver' => 'supabase',
+            'url' => env('SUPABASE_URL'),
+            'key' => env('SUPABASE_SERVICE_ROLE_KEY'),
+            'bucket' => env('SUPABASE_IMPORTS_BUCKET', 'daleel-imports'),
             'public' => false,
             'signed_url_ttl' => (int) env('SUPABASE_SIGNED_URL_TTL', 600),
             'throw' => true,

@@ -13,6 +13,8 @@ enum BusinessEventType: string
     case Directions = 'directions';
     case Share = 'share';
     case OfferView = 'offer_view';
+    case PhoneReveal = 'phone_reveal';
+    case EmailReveal = 'email_reveal';
 
     public function label(): string
     {

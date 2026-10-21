@@ -41,6 +41,7 @@ final class Permissions
         'offers.manage', 'offers.moderate',
         'content.manage', 'messages.manage',
         'settings.manage', 'analytics.view', 'audit.view',
+        'imports.manage',
     ];
 
     /** @return array<string, list<string>> */

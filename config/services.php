@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    // Google Analytics / AdSense / verification tags (IDs are managed in Admin → Settings).
+    'integrations' => [
+        'enabled' => env('INTEGRATIONS_ENABLED', env('APP_ENV') === 'production'),
+    ],
+
 ];

@@ -9,8 +9,8 @@ use App\Services\AuditLogger;
 use App\Services\MediaService;
 use App\Support\Directory;
 use App\Support\NavigationData;
+use App\Support\Sitemap;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class PurgeDemoDataCommand extends Command
@@ -48,7 +48,7 @@ class PurgeDemoDataCommand extends Command
         $audit->log('business.demo_purged', null, [], ['deleted' => $count], ['via' => 'console']);
         Directory::flushCounts();
         NavigationData::flush();
-        Cache::forget('sitemap.xml');
+        Sitemap::flush();
 
         $this->info("✔ Deleted {$count} sample listing(s).");
 

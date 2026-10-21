@@ -47,6 +47,7 @@ class SettingsService
             'social.facebook' => ['group' => 'contact', 'type' => 'url', 'value' => null],
             'social.linkedin' => ['group' => 'contact', 'type' => 'url', 'value' => null],
             'social.tiktok' => ['group' => 'contact', 'type' => 'url', 'value' => null],
+            'social.facebook_app_id' => ['group' => 'contact', 'type' => 'text', 'value' => null, 'pattern' => '/^\d{5,20}$/'],
             'footer.about' => ['group' => 'contact', 'type' => 'textarea_i18n', 'value' => [
                 'ar' => 'دليل قطر منصة رقمية تساعدك على اكتشاف الأعمال والخدمات الموثوقة في جميع أنحاء قطر.',
                 'en' => 'Daleel Qatar is a digital platform that helps you discover trusted businesses and services across Qatar.',
@@ -82,12 +83,22 @@ class SettingsService
             'seo.indexing_enabled' => ['group' => 'seo', 'type' => 'boolean', 'value' => true],
             'analytics.track_views' => ['group' => 'seo', 'type' => 'boolean', 'value' => true],
             'analytics.track_searches' => ['group' => 'seo', 'type' => 'boolean', 'value' => true],
+
+            // Google & search-engine integrations (all optional; nothing loads until an ID is set)
+            'integrations.google_verification' => ['group' => 'integrations', 'type' => 'text', 'value' => null, 'pattern' => '/^[A-Za-z0-9_\-]{10,100}$/', 'meta' => true],
+            'integrations.bing_verification' => ['group' => 'integrations', 'type' => 'text', 'value' => null, 'pattern' => '/^[A-Za-z0-9]{10,64}$/', 'meta' => true],
+            'integrations.yandex_verification' => ['group' => 'integrations', 'type' => 'text', 'value' => null, 'pattern' => '/^[A-Za-z0-9]{10,64}$/', 'meta' => true],
+            'integrations.ga4_id' => ['group' => 'integrations', 'type' => 'text', 'value' => null, 'pattern' => '/^G-[A-Z0-9]{4,15}$/'],
+            'integrations.adsense_client' => ['group' => 'integrations', 'type' => 'text', 'value' => null, 'pattern' => '/^ca-pub-\d{10,20}$/'],
+            'integrations.adsense_enabled' => ['group' => 'integrations', 'type' => 'boolean', 'value' => true],
+            'integrations.consent_banner' => ['group' => 'integrations', 'type' => 'boolean', 'value' => true],
+            'integrations.indexnow' => ['group' => 'integrations', 'type' => 'boolean', 'value' => true],
         ];
     }
 
     public static function groups(): array
     {
-        return ['brand', 'home', 'contact', 'moderation', 'uploads', 'notifications', 'seo'];
+        return ['brand', 'home', 'contact', 'moderation', 'uploads', 'notifications', 'seo', 'integrations'];
     }
 
     public function all(): array

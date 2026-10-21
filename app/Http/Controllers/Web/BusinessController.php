@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Web;
 
 use App\Enums\BusinessEventType;
-use App\Enums\ModerationStatus;
 use App\Enums\ReportReason;
 use App\Http\Controllers\Controller;
 use App\Models\Business;
@@ -13,7 +12,9 @@ use App\Models\Review;
 use App\Services\AnalyticsRecorder;
 use App\Services\ClaimService;
 use App\Services\ReviewService;
+use App\Support\BusinessSummary;
 use App\Support\Directory;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
@@ -42,13 +43,14 @@ class BusinessController extends Controller
             ->orderByRaw('CASE WHEN municipality_id = ? THEN 0 ELSE 1 END', [$business->municipality_id])
             ->orderByDesc('is_verified')->latest('published_at')->limit(4)->get();
 
-        if ($business->isPublished()) {
+        // Cookie-less visits may be answered by the CDN; those pages count the view with a beacon (viewed()).
+        if ($business->isPublished() && request()->cookies->count() > 0) {
             $analytics->recordView($business);
         }
 
         $name = $business->t('name');
         seo()->title($business->t('meta_title') ?: trim($name.' — '.$business->category?->t('name').($business->municipality ? ' '.__('search.in_location', ['location' => $business->municipality->t('name')]) : '')))
-            ->description($business->t('meta_description') ?: ($business->t('tagline') ?: $business->t('description')))
+            ->description($business->t('meta_description') ?: ($business->t('tagline') ?: ($business->t('description') ?: BusinessSummary::for($business))))
             ->image($business->coverUrl() ?? $business->logoUrl())
             ->type('business.business')
             ->noindex(! $business->isPublished() || $business->is_demo)
@@ -60,6 +62,8 @@ class BusinessController extends Controller
             'ownReview' => $ownReview,
             'similar' => $similar,
             'isFavorite' => in_array($business->id, Directory::favoriteIds(), true),
+            'summary' => BusinessSummary::for($business),
+            'shareText' => trim($name.($business->category ? ' — '.$business->category->t('name') : '').($business->locationLabel() ? ' · '.$business->locationLabel() : '')),
             'reviewsEnabled' => $reviews->enabled(),
             'canClaim' => $claims->canBeClaimed($business) && ! $business->isOwnedBy($user),
             'reportReasons' => ReportReason::cases(),
@@ -103,6 +107,16 @@ class BusinessController extends Controller
         ]);
     }
 
+    /** View beacon sent by the profile page (one view per visitor every 30 minutes, bots excluded). */
+    public function viewed(Business $business, AnalyticsRecorder $analytics): Response
+    {
+        if ($business->isPublished()) {
+            $analytics->recordView($business);
+        }
+
+        return response()->noContent();
+    }
+
     /** Records contact interactions (call, WhatsApp, website, directions, share) for owner insights. */
     public function track(Request $request, Business $business, AnalyticsRecorder $analytics): Response
     {
@@ -117,6 +131,36 @@ class BusinessController extends Controller
         return response()->noContent();
     }
 
+    /**
+     * Phone numbers and e-mail addresses are never printed in the page source:
+     * visitors press "Press to view" and the details are fetched here. Crawlers
+     * and scrapers get nothing, and each reveal is counted for the owner.
+     */
+    public function reveal(Request $request, Business $business, string $type, AnalyticsRecorder $analytics): JsonResponse
+    {
+        abort_unless($request->ajax(), 404);
+        abort_unless(Gate::allows('view', $business), 404);
+
+        $items = match ($type) {
+            'phone' => collect([$business->phone, ...(array) $business->extra_phones])
+                ->filter()->unique()->values()
+                ->map(fn ($p) => ['value' => $p, 'href' => 'tel:'.preg_replace('/[^\d+]/', '', (string) $p)]),
+            'whatsapp' => collect([$business->whatsapp])->filter()
+                ->map(fn ($p) => ['value' => $p, 'href' => 'https://wa.me/'.preg_replace('/\D+/', '', (string) $p)]),
+            'email' => collect([$business->email, ...(array) $business->extra_emails])
+                ->filter()->unique()->values()
+                ->map(fn ($e) => ['value' => $e, 'href' => 'mailto:'.$e]),
+        };
+
+        if ($business->isPublished() && $items->isNotEmpty()) {
+            $analytics->recordInteraction($business, $type === 'email' ? BusinessEventType::EmailReveal : BusinessEventType::PhoneReveal);
+        }
+
+        return response()->json(['items' => $items->values()->all()])
+            ->header('Cache-Control', 'no-store, private')
+            ->header('X-Robots-Tag', 'noindex, nofollow');
+    }
+
     private function schema(Business $business): array
     {
         $days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -127,12 +171,10 @@ class BusinessController extends Controller
             '@id' => route('business.show', $business).'#business',
             'name' => $business->t('name'),
             'alternateName' => $business->t('name', app()->getLocale() === 'ar' ? 'en' : 'ar'),
-            'description' => $business->t('description'),
+            'description' => $business->t('description') ?: BusinessSummary::for($business),
             'url' => route('business.show', $business),
             'image' => array_values(array_filter([$business->coverUrl(), $business->logoUrl(), ...$business->images->take(5)->map->url()->all()])),
             'logo' => $business->logoUrl(),
-            'telephone' => $business->phone,
-            'email' => $business->email,
             'address' => array_filter([
                 '@type' => 'PostalAddress',
                 'streetAddress' => $business->t('address'),

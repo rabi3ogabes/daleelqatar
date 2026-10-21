@@ -8,9 +8,9 @@ use App\Http\Controllers\Controller;
 use App\Services\AuditLogger;
 use App\Services\MediaService;
 use App\Services\SettingsService;
+use App\Support\Sitemap;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -40,6 +40,14 @@ class SettingsController extends Controller
         $defs = collect(SettingsService::defaults())->filter(fn ($d) => $d['group'] === $group);
         $maxKb = (int) setting('uploads.max_image_kb', 5120);
 
+        // Verification codes are often pasted as the whole <meta> tag: keep only its content.
+        foreach ($defs as $key => $d) {
+            $value = $request->input('s.'.self::inputName($key));
+            if (($d['meta'] ?? false) && is_string($value) && preg_match('/content\s*=\s*["\']([^"\']+)["\']/i', $value, $m)) {
+                $request->merge(['s' => array_replace((array) $request->input('s'), [self::inputName($key) => $m[1]])]);
+            }
+        }
+
         $rules = [];
         foreach ($defs as $key => $d) {
             $in = 's.'.self::inputName($key);
@@ -51,7 +59,7 @@ class SettingsController extends Controller
                 'email' => $rules[$in] = ['nullable', 'email:rfc', 'max:191'],
                 'url' => $rules[$in] = ['nullable', 'url:http,https', 'max:300'],
                 'image' => $rules['file_'.self::inputName($key)] = ['nullable', 'image', 'mimetypes:'.implode(',', MediaService::IMAGE_MIMES), 'max:'.$maxKb],
-                default => $rules[$in] = ['nullable', 'string', 'max:300'],
+                default => $rules[$in] = array_values(array_filter(['nullable', 'string', 'max:300', isset($d['pattern']) ? 'regex:'.$d['pattern'] : null])),
             };
         }
         $request->validate($rules);
@@ -65,7 +73,7 @@ class SettingsController extends Controller
                 'boolean' => $request->boolean("s.$input"),
                 'integer' => (int) $request->input("s.$input"),
                 'image' => $old,
-                default => $request->input("s.$input") ?: null,
+                default => is_string($request->input("s.$input")) ? (trim($request->input("s.$input")) ?: null) : null,
             };
 
             if ($d['type'] === 'image') {
@@ -86,7 +94,7 @@ class SettingsController extends Controller
 
         if ($changed) {
             $audit->log('settings.updated', null, array_map(fn ($c) => $c['from'], $changed), array_map(fn ($c) => $c['to'], $changed), ['group' => $group]);
-            Cache::forget('sitemap.xml');
+            Sitemap::flush();
         }
 
         return redirect()->route('admin.settings.edit', $group)->with('success', $changed ? __('admin.settings.saved') : __('admin.settings.no_changes'));

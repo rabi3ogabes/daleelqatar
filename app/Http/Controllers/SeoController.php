@@ -4,77 +4,50 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Models\Business;
-use App\Models\Category;
-use App\Models\Municipality;
-use App\Models\Offer;
-use App\Models\Page;
-use App\Support\Directory;
+use App\Support\Integrations;
+use App\Support\Sitemap;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Cache;
 
 class SeoController extends Controller
 {
-    /**
-     * XML sitemap with Arabic/English alternates. Only published, non-demo
-     * listings and non-empty category/location pages are included.
-     */
+    /** Sitemap index submitted to Google Search Console and Bing Webmaster Tools. */
     public function sitemap(): Response
     {
         abort_unless(setting('seo.sitemap_enabled', true), 404);
 
-        $xml = Cache::remember('sitemap.xml', now()->addHour(), function () {
-            $entries = [];
-            $add = function (string $name, array $params = [], ?\DateTimeInterface $modified = null, string $priority = '0.6') use (&$entries) {
-                $entries[] = [
-                    'ar' => route('ar.'.$name, $params),
-                    'en' => route('en.'.$name, $params),
-                    'lastmod' => $modified?->format('Y-m-d'),
-                    'priority' => $priority,
-                ];
-            };
+        return response(Sitemap::index(), 200, ['Content-Type' => 'application/xml; charset=UTF-8']);
+    }
 
-            $add('home', [], now(), '1.0');
-            foreach (['categories.index', 'locations.index', 'offers.index', 'about', 'faq', 'contact', 'add-business', 'businesses.latest'] as $static) {
-                $add($static, [], null, '0.5');
-            }
+    public function sitemapPart(string $part): Response
+    {
+        abort_unless(setting('seo.sitemap_enabled', true) && Sitemap::isPart($part), 404);
 
-            $categoryCounts = Directory::categoryCounts();
-            Category::query()->active()->get(['id', 'slug', 'parent_id', 'updated_at'])->each(function (Category $c) use ($add, $categoryCounts) {
-                $count = $c->parent_id === null
-                    ? ($categoryCounts[$c->id] ?? 0)
-                    : Business::query()->published()->where('category_id', $c->id)->count();
-                if ($count > 0) {
-                    $add('categories.show', ['category' => $c->slug], $c->updated_at, '0.7');
-                }
-            });
+        return response(Sitemap::part($part), 200, ['Content-Type' => 'application/xml; charset=UTF-8']);
+    }
 
-            $municipalityCounts = Directory::municipalityCounts();
-            Municipality::query()->active()->get(['id', 'slug', 'updated_at'])->each(function (Municipality $m) use ($add, $municipalityCounts) {
-                if (($municipalityCounts[$m->id] ?? 0) > 0) {
-                    $add('locations.show', ['municipality' => $m->slug], $m->updated_at, '0.6');
-                }
-            });
+    /** Authorised digital sellers (IAB ads.txt) for Google AdSense. */
+    public function adsTxt(): Response
+    {
+        $client = Integrations::adsenseClient();
+        abort_if($client === null, 404);
 
-            Business::query()->published()->where('is_demo', false)->select(['id', 'slug', 'updated_at'])
-                ->orderBy('id')->chunk(1000, function ($chunk) use ($add) {
-                    foreach ($chunk as $b) {
-                        $add('business.show', ['business' => $b->slug], $b->updated_at, '0.8');
-                    }
-                });
+        return response('google.com, '.substr($client, 3).', DIRECT, f08c47fec0942fa0'."\n", 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
+    }
 
-            Offer::query()->live()->select(['offers.id', 'offers.slug', 'offers.updated_at', 'offers.business_id'])->get()
-                ->each(fn ($o) => $add('offers.show', ['offer' => $o->slug], $o->updated_at, '0.4'));
+    /** IndexNow ownership key (referenced as keyLocation when URLs are submitted). */
+    public function indexNowKey(): Response
+    {
+        return response(Integrations::indexNowKey(), 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
+    }
 
-            Page::query()->where('is_published', true)->whereIn('slug', ['privacy', 'terms'])->get()
-                ->each(fn ($p) => $add($p->slug, [], $p->updated_at, '0.2'));
+    /** Fresh CSRF token for forms on CDN-cached pages (which are served without a session). */
+    public function csrfToken(Request $request): JsonResponse
+    {
+        abort_unless($request->ajax(), 404);
 
-            // Prepended here: Blade cannot hold "<?xml" (it is a PHP open tag when short_open_tag is on).
-            return '<?xml version="1.0" encoding="UTF-8"?>'."\n".view('seo.sitemap', ['entries' => $entries])->render();
-        });
-
-        return response($xml, 200, ['Content-Type' => 'application/xml; charset=UTF-8']);
+        return response()->json(['token' => csrf_token()], 200, ['Cache-Control' => 'no-store, private']);
     }
 
     public function robots(): Response
@@ -91,6 +64,9 @@ class SeoController extends Controller
             'Disallow: /api/',
             'Disallow: /cron/',
             'Disallow: /*?*sort=',
+            'Disallow: /business/*/reveal/', 'Disallow: /en/business/*/reveal/',
+            'Disallow: /map/data.json', 'Disallow: /en/map/data.json',
+            'Disallow: /csrf-token',
             '',
             'Sitemap: '.route('sitemap'),
         ] : ['User-agent: *', 'Disallow: /'];

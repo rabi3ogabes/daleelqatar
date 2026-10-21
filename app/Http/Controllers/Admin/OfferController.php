@@ -12,9 +12,9 @@ use App\Models\Offer;
 use App\Services\MediaService;
 use App\Services\OfferService;
 use App\Support\AdminNavigation;
+use App\Support\Sitemap;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -43,7 +43,7 @@ class OfferController extends Controller
         ]);
         $this->offers->moderate($offer, $request->user(), OfferStatus::from($data['status']), $data['reason'] ?? null);
         AdminNavigation::flush();
-        Cache::forget('sitemap.xml');
+        Sitemap::flush();
 
         return back()->with('success', __('admin.offers.moderated'));
     }
@@ -58,7 +58,7 @@ class OfferController extends Controller
         $data = $this->validated($request, true);
         $business = Business::query()->findOrFail($data['business_id']);
         $offer = $this->offers->create($business, $request->user(), collect($data)->except(['business_id', 'image'])->all(), $request->file('image'));
-        Cache::forget('sitemap.xml');
+        Sitemap::flush();
 
         return redirect()->route('admin.offers.index', ['status' => $offer->status->value])->with('success', __('admin.offers.created'));
     }
@@ -72,7 +72,7 @@ class OfferController extends Controller
     {
         $data = $this->validated($request, false);
         $this->offers->update($offer, $request->user(), collect($data)->except(['image'])->all(), $request->file('image'));
-        Cache::forget('sitemap.xml');
+        Sitemap::flush();
 
         return redirect()->route('admin.offers.index', ['status' => $offer->status->value])->with('success', __('common.updated'));
     }

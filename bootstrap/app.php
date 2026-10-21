@@ -2,6 +2,7 @@
 
 use App\Exceptions\WorkflowException;
 use App\Http\Middleware\ApiLocale;
+use App\Http\Middleware\CacheGuestPages;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetLocale;
@@ -14,6 +15,8 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Middleware\PermissionMiddleware;
+use Spatie\Permission\Middleware\RoleMiddleware;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -26,15 +29,17 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(at: env('TRUSTED_PROXIES', '*'));
-        $middleware->append([SetLocale::class, SecurityHeaders::class]);
+        $middleware->append([SetLocale::class, SecurityHeaders::class, CacheGuestPages::class]);
+        // Anonymous analytics beacons are also sent from CDN-cached pages, which carry no session.
+        $middleware->validateCsrfTokens(except: ['business/*/track', 'en/business/*/track', 'business/*/viewed', 'en/business/*/viewed']);
         $middleware->web(append: [EnsureAccountIsActive::class]);
         $middleware->api(prepend: [ApiLocale::class]);
 
         $middleware->alias([
             'locale' => SetLocale::class,
             'active' => EnsureAccountIsActive::class,
-            'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
-            'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'role' => RoleMiddleware::class,
+            'permission' => PermissionMiddleware::class,
         ]);
 
         $middleware->redirectGuestsTo(fn () => route('login'));

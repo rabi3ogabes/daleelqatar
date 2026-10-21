@@ -7,7 +7,7 @@ namespace App\Http\Controllers\Admin\Concerns;
 use App\Support\AdminNavigation;
 use App\Support\Directory;
 use App\Support\NavigationData;
-use Illuminate\Support\Facades\Cache;
+use App\Support\Sitemap;
 
 trait FlushesDirectoryCaches
 {
@@ -16,6 +16,6 @@ trait FlushesDirectoryCaches
         NavigationData::flush();
         Directory::flushCounts();
         AdminNavigation::flush();
-        Cache::forget('sitemap.xml');
+        Sitemap::flush();
     }
 }

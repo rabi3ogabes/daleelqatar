@@ -59,13 +59,20 @@ MD,
 ## كيف نستخدم المعلومات
 لتشغيل الدليل، ومراجعة القوائم، والتواصل معك بشأن حسابك، وتحسين الخدمة. لا نبيع بياناتك الشخصية.
 
+## مصادر بيانات الأعمال
+تُجمع قوائم الأعمال من أصحابها مباشرة ومن مصادر عامة متاحة مثل الأدلة التجارية المنشورة. تُعرض أرقام الهواتف وعناوين البريد الإلكتروني عند الطلب فقط حمايةً لها من الرسائل المزعجة. يمكن لصاحب أي نشاط طلب تصحيح بياناته أو حذفها في أي وقت عبر صفحة **اتصل بنا** أو بالمطالبة بملكية القائمة.
+
+## ملفات تعريف الارتباط والتحليلات والإعلانات
+- نستخدم ملفات تعريف ارتباط ضرورية لتسجيل الدخول وحماية النماذج.
+- قد نستخدم **Google Analytics** لقياس الزيارات بشكل مجمّع.
+- قد نعرض إعلانات عبر **Google AdSense**. يستخدم موردو الجهات الخارجية، ومنهم Google، ملفات تعريف الارتباط لعرض الإعلانات بناءً على زياراتك السابقة لهذا الموقع أو لمواقع أخرى. يتيح ملف تعريف الارتباط الإعلاني من Google له ولشركائه عرض إعلانات لك استناداً إلى زياراتك.
+- يمكنك إيقاف الإعلانات المخصصة من [إعدادات الإعلانات في Google](https://adssettings.google.com)، أو من [www.aboutads.info](https://www.aboutads.info/choices). ويمكنك قبول ملفات تعريف الارتباط غير الضرورية أو رفضها من الشريط الذي يظهر عند زيارتك الأولى.
+
 ## حقوقك
 يمكنك تحديث بياناتك أو طلب حذف حسابك في أي وقت من خلال إعدادات الحساب أو التواصل معنا.
 
 ## الأمان
 نستخدم اتصالات مشفرة وصلاحيات وصول محددة وسجلات تدقيق لحماية البيانات.
-
-*يُرجى مراجعة هذه السياسة من قبل مستشار قانوني قبل الإطلاق الرسمي.*
 MD,
                 <<<'MD'
 This policy explains how **Daleel Qatar** collects, uses and protects information.
@@ -79,13 +86,20 @@ This policy explains how **Daleel Qatar** collects, uses and protects informatio
 ## How we use information
 To operate the directory, review listings, contact you about your account and improve the service. We do not sell your personal data.
 
+## Where business information comes from
+Listings are provided by business owners and compiled from publicly available sources such as published business directories. Phone numbers and e-mail addresses are only shown on request, to protect them from spam. Any business can ask us to correct or remove its details at any time through our **Contact** page or by claiming the listing.
+
+## Cookies, analytics and advertising
+- We use essential cookies for signing in and protecting forms.
+- We may use **Google Analytics** to measure traffic in aggregate.
+- We may show ads through **Google AdSense**. Third-party vendors, including Google, use cookies to serve ads based on your prior visits to this website or other websites. Google's use of advertising cookies enables it and its partners to serve ads to you based on your visits to this and/or other sites on the Internet.
+- You can opt out of personalised advertising in [Google Ads Settings](https://adssettings.google.com), or at [www.aboutads.info](https://www.aboutads.info/choices). You can accept or decline non-essential cookies in the banner shown on your first visit.
+
 ## Your rights
 You can update your details or request deletion of your account at any time from your account settings or by contacting us.
 
 ## Security
 We use encrypted connections, least-privilege access controls and audit logs to protect data.
-
-*Please have this policy reviewed by legal counsel before the official launch.*
 MD,
             ],
             'terms' => [
@@ -110,7 +124,6 @@ MD,
 ## حدود المسؤولية
 يقدم الدليل المعلومات كما وردت من أصحاب الأعمال، ولا يتحمل مسؤولية التعاملات بين المستخدمين والأعمال.
 
-*يُرجى مراجعة هذه الشروط من قبل مستشار قانوني قبل الإطلاق الرسمي.*
 MD,
                 <<<'MD'
 By using **Daleel Qatar** you agree to the following terms.
@@ -132,7 +145,6 @@ Content that violates the laws of the State of Qatar or infringes the rights of 
 ## Limitation of liability
 The directory presents information as provided by businesses and is not responsible for transactions between users and businesses.
 
-*Please have these terms reviewed by legal counsel before the official launch.*
 MD,
             ],
         ];

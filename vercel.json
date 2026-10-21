@@ -7,7 +7,7 @@
     "functions": {
         "api/index.php": {
             "runtime": "vercel-php@0.8.0",
-            "maxDuration": 30,
+            "maxDuration": 60,
             "excludeFiles": "{.git/**,.vercel/**,node_modules/**,tests/**,vendor/**/.git/**,vendor/*/*/tests/**,resources/css/**,resources/js/**,vercel.json,.vercelignore,package.json,package-lock.json,vite.config.js}"
         }
     },
@@ -35,6 +35,10 @@
         {
             "path": "/cron/maintenance",
             "schedule": "0 3 * * *"
+        },
+        {
+            "path": "/cron/discovery",
+            "schedule": "30 2 * * *"
         }
     ]
 }

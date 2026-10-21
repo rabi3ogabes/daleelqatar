@@ -30,6 +30,28 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified', 'can:adm
         Route::delete('/businesses/{business:id}/gallery/{image}', [Admin\BusinessController::class, 'destroyImage'])->middleware('can:businesses.update')->name('businesses.gallery.destroy');
     });
 
+    Route::middleware('can:imports.manage')->group(function () {
+        Route::get('/imports', [Admin\ImportController::class, 'index'])->name('imports.index');
+        Route::post('/imports', [Admin\ImportController::class, 'store'])->middleware('throttle:20,1')->name('imports.store');
+        Route::post('/imports/sign', [Admin\ImportController::class, 'sign'])->middleware('throttle:20,1')->name('imports.sign');
+        Route::get('/imports/{batch:uuid}', [Admin\ImportController::class, 'show'])->name('imports.show');
+        Route::post('/imports/{batch:uuid}/uploaded', [Admin\ImportController::class, 'uploaded'])->name('imports.uploaded');
+        Route::post('/imports/{batch:uuid}/start', [Admin\ImportController::class, 'start'])->name('imports.start');
+        Route::post('/imports/{batch:uuid}/process', [Admin\ImportController::class, 'process'])->name('imports.process');
+        Route::post('/imports/{batch:uuid}/cancel', [Admin\ImportController::class, 'cancel'])->name('imports.cancel');
+        Route::get('/imports/{batch:uuid}/report', [Admin\ImportController::class, 'report'])->name('imports.report');
+        Route::delete('/imports/{batch:uuid}', [Admin\ImportController::class, 'destroy'])->name('imports.destroy');
+
+        Route::get('/discovery', [Admin\DiscoveryController::class, 'index'])->name('discovery.index');
+        Route::get('/discovery/create', [Admin\DiscoveryController::class, 'create'])->name('discovery.create');
+        Route::post('/discovery', [Admin\DiscoveryController::class, 'store'])->name('discovery.store');
+        Route::get('/discovery/{source}/edit', [Admin\DiscoveryController::class, 'edit'])->name('discovery.edit');
+        Route::put('/discovery/{source}', [Admin\DiscoveryController::class, 'update'])->name('discovery.update');
+        Route::delete('/discovery/{source}', [Admin\DiscoveryController::class, 'destroy'])->name('discovery.destroy');
+        Route::post('/discovery/{source}/run', [Admin\DiscoveryController::class, 'run'])->middleware('throttle:30,1')->name('discovery.run');
+        Route::post('/discovery/test', [Admin\DiscoveryController::class, 'test'])->middleware('throttle:30,1')->name('discovery.test');
+    });
+
     Route::middleware('can:claims.review')->group(function () {
         Route::get('/claims', [Admin\ClaimController::class, 'index'])->name('claims.index');
         Route::get('/claims/{claim}', [Admin\ClaimController::class, 'show'])->name('claims.show');

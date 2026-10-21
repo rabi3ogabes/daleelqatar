@@ -339,6 +339,37 @@ final class SupabaseStorageAdapter implements FilesystemAdapter
         return str_starts_with($signed, 'http') ? $signed : $this->baseUrl.$signed;
     }
 
+    /**
+     * One-time URL the browser can PUT a file to directly — large uploads never
+     * pass through the application (serverless functions cap request bodies).
+     */
+    public function createSignedUploadUrl(string $path): string
+    {
+        $response = $this->http()->post($this->baseUrl.'/object/upload/sign/'.$this->objectPath($path));
+        $url = $response->json('url');
+
+        if ($response->failed() || ! is_string($url)) {
+            throw UnableToWriteFile::atLocation($path, 'Could not create a signed upload URL: '.$this->errorMessage($response));
+        }
+
+        return str_starts_with($url, 'http') ? $url : $this->baseUrl.$url;
+    }
+
+    /** Streams an object to a local file without holding it in memory. */
+    public function downloadTo(string $path, string $target): void
+    {
+        try {
+            $response = $this->http()->timeout(120)->sink($target)->get($this->baseUrl.'/object/'.$this->objectPath($path));
+        } catch (Throwable $e) {
+            throw UnableToReadFile::fromLocation($path, $e->getMessage(), $e);
+        }
+
+        if ($response->failed()) {
+            @unlink($target);
+            throw UnableToReadFile::fromLocation($path, $this->errorMessage($response));
+        }
+    }
+
     private function errorMessage(Response $response): string
     {
         return sprintf('Supabase Storage responded %d: %s', $response->status(), (string) ($response->json('message') ?? $response->json('error') ?? 'unknown error'));

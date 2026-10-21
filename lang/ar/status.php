@@ -53,5 +53,7 @@ return [
         'directions' => 'الاتجاهات',
         'share' => 'مشاركة',
         'offer_view' => 'مشاهدة عرض',
+        'phone_reveal' => 'إظهار الهاتف',
+        'email_reveal' => 'إظهار البريد',
     ],
 ];

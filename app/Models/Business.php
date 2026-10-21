@@ -8,7 +8,11 @@ use App\Enums\BusinessStatus;
 use App\Enums\ModerationStatus;
 use App\Enums\OfferStatus;
 use App\Models\Concerns\HasTranslations;
+use App\Services\IndexNow;
+use App\Support\Import\BusinessIdentity;
+use App\Support\Import\Normalizer;
 use Carbon\CarbonImmutable;
+use Database\Factories\BusinessFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -20,7 +24,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Business extends Model
 {
-    /** @use HasFactory<\Database\Factories\BusinessFactory> */
+    /** @use HasFactory<BusinessFactory> */
     use HasFactory, HasTranslations, HasUuids, SoftDeletes;
 
     public const TIMEZONE = 'Asia/Qatar';
@@ -54,7 +58,30 @@ class Business extends Model
             'rating_avg' => 'float',
             'latitude' => 'float',
             'longitude' => 'float',
+            'extra_phones' => 'array',
+            'extra_emails' => 'array',
+            'imported_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        // The comparison key used to spot duplicate listings with the same name.
+        static::saving(function (Business $business) {
+            if ($business->isDirty(['name_en', 'name_ar']) || $business->name_key === null) {
+                $business->name_key = Normalizer::nameKey($business->name_en ?: (string) $business->name_ar);
+            }
+        });
+
+        // Phones, e-mails and website domains are indexed so imports never duplicate a listing.
+        static::saved(function (Business $business) {
+            if ($business->wasRecentlyCreated || $business->wasChanged(['phone', 'whatsapp', 'email', 'website', 'extra_phones', 'extra_emails'])) {
+                BusinessIdentity::sync($business);
+            }
+            if ($business->wasRecentlyCreated || $business->wasChanged()) {
+                IndexNow::queue($business);
+            }
+        });
     }
 
     public function uniqueIds(): array
@@ -152,6 +179,16 @@ class Business extends Model
     public function events(): HasMany
     {
         return $this->hasMany(BusinessEvent::class);
+    }
+
+    public function identifiers(): HasMany
+    {
+        return $this->hasMany(BusinessIdentifier::class);
+    }
+
+    public function sources(): HasMany
+    {
+        return $this->hasMany(BusinessSource::class);
     }
 
     public function favoritedBy(): BelongsToMany

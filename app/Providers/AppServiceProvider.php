@@ -5,9 +5,21 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Contracts\BusinessSearchEngine;
+use App\Models\Area;
+use App\Models\Banner;
 use App\Models\Business;
+use App\Models\BusinessClaimRequest;
+use App\Models\BusinessVerificationRequest;
+use App\Models\Category;
+use App\Models\ContactMessage;
+use App\Models\Faq;
+use App\Models\ListingReport;
+use App\Models\Municipality;
 use App\Models\Offer;
+use App\Models\Page;
 use App\Models\Review;
+use App\Models\ReviewReport;
+use App\Models\SiteSetting;
 use App\Models\User;
 use App\Policies\BusinessPolicy;
 use App\Policies\OfferPolicy;
@@ -17,6 +29,7 @@ use App\Services\SettingsService;
 use App\Support\Localization;
 use App\Support\Permissions;
 use App\Support\Search\PostgresBusinessSearch;
+use App\Support\SeoMeta;
 use App\Support\Storage\SupabaseStorageAdapter;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
@@ -32,13 +45,14 @@ use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use League\Flysystem\Filesystem;
+use Spatie\Permission\Models\Role;
 
 class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
         $this->app->singleton(SettingsService::class);
-        $this->app->scoped(\App\Support\SeoMeta::class);
+        $this->app->scoped(SeoMeta::class);
         $this->app->bind(BusinessSearchEngine::class, PostgresBusinessSearch::class);
     }
 
@@ -57,19 +71,19 @@ class AppServiceProvider extends ServiceProvider
             'business' => Business::class,
             'review' => Review::class,
             'offer' => Offer::class,
-            'category' => \App\Models\Category::class,
-            'municipality' => \App\Models\Municipality::class,
-            'area' => \App\Models\Area::class,
-            'claim' => \App\Models\BusinessClaimRequest::class,
-            'verification' => \App\Models\BusinessVerificationRequest::class,
-            'page' => \App\Models\Page::class,
-            'faq' => \App\Models\Faq::class,
-            'banner' => \App\Models\Banner::class,
-            'setting' => \App\Models\SiteSetting::class,
-            'listing_report' => \App\Models\ListingReport::class,
-            'review_report' => \App\Models\ReviewReport::class,
-            'contact_message' => \App\Models\ContactMessage::class,
-            'role' => \Spatie\Permission\Models\Role::class,
+            'category' => Category::class,
+            'municipality' => Municipality::class,
+            'area' => Area::class,
+            'claim' => BusinessClaimRequest::class,
+            'verification' => BusinessVerificationRequest::class,
+            'page' => Page::class,
+            'faq' => Faq::class,
+            'banner' => Banner::class,
+            'setting' => SiteSetting::class,
+            'listing_report' => ListingReport::class,
+            'review_report' => ReviewReport::class,
+            'contact_message' => ContactMessage::class,
+            'role' => Role::class,
         ]);
 
         Password::defaults(fn () => $this->app->isProduction()
@@ -145,6 +159,8 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('uploads', fn (Request $r) => Limit::perHour(120)->by($key($r)));
         RateLimiter::for('search', fn (Request $r) => Limit::perMinute(90)->by($r->ip()));
         RateLimiter::for('interactions', fn (Request $r) => Limit::perMinute(30)->by($r->ip()));
+        // Revealing hidden phone numbers / e-mails: generous for people, useless for harvesting.
+        RateLimiter::for('reveal', fn (Request $r) => [Limit::perMinute(20)->by($r->ip()), Limit::perDay(300)->by($r->ip())]);
         RateLimiter::for('api', fn (Request $r) => Limit::perMinute(120)->by($key($r)));
         RateLimiter::for('api-auth', fn (Request $r) => [
             Limit::perMinute(6)->by(mb_strtolower((string) $r->input('email')).'|'.$r->ip()),

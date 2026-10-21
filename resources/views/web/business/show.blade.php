@@ -10,6 +10,7 @@
     $website = safe_external_url($business->website);
 @endphp
 <x-layouts.app>
+    @if($business->isPublished())<span hidden data-view-beacon="{{ route('business.viewed', $business) }}"></span>@endif
     {{-- Cover --}}
     <section class="relative h-56 overflow-hidden bg-navy-900 sm:h-72 lg:h-80">
         @if($business->coverUrl())
@@ -65,11 +66,17 @@
 
                 {{-- Primary actions --}}
                 <div class="flex flex-wrap gap-2 lg:w-80 lg:justify-end">
-                    @if($business->telUrl())
-                        <a href="{{ $business->telUrl() }}" @click="dqTrack(@js($trackUrl), 'call')" class="btn btn-primary flex-1 sm:flex-none"><x-icon name="phone" class="size-4" />{{ __('business.call') }}</a>
+                    @if($business->phone)
+                        <div x-data="reveal(@js(route('business.reveal', [$business, 'phone'])))" class="flex flex-1 sm:flex-none">
+                            <button type="button" x-show="!items" @click="load()" :aria-busy="loading" class="btn btn-primary w-full"><x-icon name="phone" class="size-4" />{{ __('directory.call') }}</button>
+                            <a x-show="items" x-cloak :href="items && items[0] ? items[0].href : '#'" @click="dqTrack(@js($trackUrl), 'call')" class="btn btn-primary w-full" dir="ltr"><x-icon name="phone" class="size-4" /><span x-text="items && items[0] ? items[0].value : ''"></span></a>
+                        </div>
                     @endif
-                    @if($business->whatsappUrl())
-                        <a href="{{ $business->whatsappUrl() }}" target="_blank" rel="noopener noreferrer" @click="dqTrack(@js($trackUrl), 'whatsapp')" class="btn flex-1 bg-[#128C4A] text-white hover:bg-[#0f7a40] sm:flex-none"><x-icon name="whatsapp" class="size-4" />{{ __('business.whatsapp') }}</a>
+                    @if($business->whatsapp)
+                        <div x-data="reveal(@js(route('business.reveal', [$business, 'whatsapp'])))" class="flex flex-1 sm:flex-none">
+                            <button type="button" x-show="!items" @click="load()" :aria-busy="loading" class="btn w-full bg-[#128C4A] text-white hover:bg-[#0f7a40]"><x-icon name="whatsapp" class="size-4" />{{ __('business.whatsapp') }}</button>
+                            <a x-show="items" x-cloak :href="items && items[0] ? items[0].href : '#'" target="_blank" rel="noopener noreferrer" @click="dqTrack(@js($trackUrl), 'whatsapp')" class="btn w-full bg-[#128C4A] text-white hover:bg-[#0f7a40]" dir="ltr"><x-icon name="whatsapp" class="size-4" /><span x-text="items && items[0] ? items[0].value : ''"></span></a>
+                        </div>
                     @endif
                     @if($business->directionsUrl())
                         <a href="{{ $business->directionsUrl() }}" target="_blank" rel="noopener noreferrer" @click="dqTrack(@js($trackUrl), 'directions')" class="btn btn-outline flex-1 sm:flex-none"><x-icon name="navigation" class="size-4" />{{ __('business.directions') }}</a>
@@ -78,7 +85,7 @@
                         @if($business->isPublished())
                             <x-favorite-button :business="$business" :favorited="$isFavorite" class="!btn-icon !size-11 !rounded-xl border border-navy-200 !bg-white !shadow-none" />
                         @endif
-                        <button type="button" x-data="share(@js(route('business.show', $business)), @js($name), @js(__('common.link_copied')), @js($trackUrl))" @click="share()" class="btn-icon size-11 rounded-xl border border-navy-200 bg-white text-navy-900 hover:bg-navy-50" aria-label="{{ __('business.share') }}"><x-icon name="share-2" class="size-[1.15rem]" /></button>
+                        <x-share-menu :url="route('business.show', $business)" :title="$name" :text="$shareText" :track-url="$trackUrl" />
                     </div>
                 </div>
             </div>
@@ -89,20 +96,29 @@
         <div class="mt-8 grid gap-8 lg:grid-cols-12">
             {{-- Main column --}}
             <div class="space-y-8 lg:col-span-8">
-                @if($business->t('description'))
-                    <section class="card card-pad" aria-labelledby="about-h">
-                        <h2 id="about-h" class="text-lg font-semibold">{{ __('business.about') }}</h2>
-                        <div class="divider-gold mt-2"></div>
+                <section class="card card-pad" aria-labelledby="about-h">
+                    <h2 id="about-h" class="text-lg font-semibold">{{ __('business.about') }}</h2>
+                    <div class="divider-gold mt-2"></div>
+                    @if($business->t('description'))
                         <div class="prose-dq mt-4 whitespace-pre-line">{{ $business->t('description') }}</div>
-                        @if($business->categories->isNotEmpty())
-                            <div class="mt-5 flex flex-wrap gap-2">
-                                @foreach($business->categories as $cat)
-                                    <a href="{{ route('categories.show', $cat) }}" class="badge badge-neutral hover:bg-gold-50">{{ $cat->t('name') }}</a>
-                                @endforeach
-                            </div>
-                        @endif
-                    </section>
-                @endif
+                    @else
+                        <p class="prose-dq mt-4">{{ $summary }}</p>
+                    @endif
+                    @if($business->categories->isNotEmpty())
+                        <div class="mt-5 flex flex-wrap gap-2">
+                            @foreach($business->categories as $cat)
+                                <a href="{{ route('categories.show', $cat) }}" class="badge badge-neutral hover:bg-gold-50">{{ $cat->t('name') }}</a>
+                            @endforeach
+                        </div>
+                    @endif
+                    {{-- At-a-glance facts; missing details are shown as N/A --}}
+                    <dl class="mt-6 grid gap-x-6 gap-y-3 border-t border-navy-50 pt-5 text-sm sm:grid-cols-2">
+                        <div class="flex justify-between gap-3"><dt class="text-muted-strong">{{ __('directory.facts.category') }}</dt><dd class="text-end font-medium text-navy-900">{{ $business->category?->t('name') ?? __('directory.na') }}</dd></div>
+                        <div class="flex justify-between gap-3"><dt class="text-muted-strong">{{ __('directory.facts.location') }}</dt><dd class="text-end font-medium text-navy-900">{{ $business->locationLabel() ?? __('directory.na') }}</dd></div>
+                        <div class="flex justify-between gap-3"><dt class="text-muted-strong">{{ __('directory.facts.arabic_name') }}</dt><dd class="text-end font-medium text-navy-900" lang="ar">{{ $business->name_ar ?: __('directory.na') }}</dd></div>
+                        <div class="flex justify-between gap-3"><dt class="text-muted-strong">{{ __('directory.facts.english_name') }}</dt><dd class="text-end font-medium text-navy-900" lang="en">{{ $business->name_en ?: __('directory.na') }}</dd></div>
+                    </dl>
+                </section>
 
                 @if($business->services->isNotEmpty())
                     <section class="card card-pad" aria-labelledby="services-h">
@@ -274,23 +290,56 @@
             {{-- Sidebar --}}
             <aside class="space-y-6 lg:col-span-4">
                 <section class="card card-pad" aria-labelledby="contact-h">
-                    <h2 id="contact-h" class="font-semibold">{{ __('business.contact') }}</h2>
-                    <ul class="mt-4 space-y-3 text-sm">
-                        @if($business->phone)
-                            <li><a href="{{ $business->telUrl() }}" @click="dqTrack(@js($trackUrl), 'call')" class="flex items-center gap-3 rounded-xl p-2 -m-2 hover:bg-navy-50"><span class="flex size-9 items-center justify-center rounded-lg bg-gold-50 text-gold-700"><x-icon name="phone" class="size-4" /></span><span dir="ltr" class="font-medium text-navy-900">{{ $business->phone }}</span></a></li>
-                        @endif
-                        @if($business->whatsappUrl())
-                            <li><a href="{{ $business->whatsappUrl() }}" target="_blank" rel="noopener noreferrer" @click="dqTrack(@js($trackUrl), 'whatsapp')" class="flex items-center gap-3 rounded-xl p-2 -m-2 hover:bg-navy-50"><span class="flex size-9 items-center justify-center rounded-lg bg-[#E7F6EE] text-[#128C4A]"><x-icon name="whatsapp" class="size-4" /></span><span dir="ltr" class="font-medium text-navy-900">{{ $business->whatsapp }}</span></a></li>
-                        @endif
-                        @if($business->email)
-                            <li><a href="mailto:{{ $business->email }}" class="flex items-center gap-3 rounded-xl p-2 -m-2 hover:bg-navy-50"><span class="flex size-9 items-center justify-center rounded-lg bg-gold-50 text-gold-700"><x-icon name="mail" class="size-4" /></span><span class="truncate font-medium text-navy-900" dir="ltr">{{ $business->email }}</span></a></li>
-                        @endif
-                        @if($website)
-                            <li><a href="{{ $website }}" target="_blank" rel="noopener noreferrer nofollow" @click="dqTrack(@js($trackUrl), 'website')" class="flex items-center gap-3 rounded-xl p-2 -m-2 hover:bg-navy-50"><span class="flex size-9 items-center justify-center rounded-lg bg-gold-50 text-gold-700"><x-icon name="globe" class="size-4" /></span><span class="truncate font-medium text-navy-900" dir="ltr">{{ preg_replace('#^https?://(www\.)?#', '', rtrim($website, '/')) }}</span></a></li>
-                        @endif
-                        @if(! $business->phone && ! $business->whatsapp && ! $business->email && ! $website)
-                            <li class="text-muted-strong">{{ __('business.no_contact') }}</li>
-                        @endif
+                    <div class="flex items-center justify-between gap-3">
+                        <h2 id="contact-h" class="font-semibold">{{ __('business.contact') }}</h2>
+                        <span class="inline-flex items-center gap-1 text-[0.7rem] text-muted"><x-icon name="lock" class="size-3" />{{ __('directory.protected') }}</span>
+                    </div>
+                    <ul class="mt-4 space-y-2.5 text-sm">
+                        @foreach([
+                            ['phone', 'phone', __('directory.labels.phone'), (bool) $business->phone, 'bg-gold-50 text-gold-700'],
+                            ['whatsapp', 'whatsapp', __('directory.labels.whatsapp'), (bool) $business->whatsapp, 'bg-[#E7F6EE] text-[#128C4A]'],
+                            ['email', 'mail', __('directory.labels.email'), (bool) $business->email, 'bg-gold-50 text-gold-700'],
+                        ] as [$type, $icon, $label, $has, $tone])
+                            <li class="rounded-xl border border-navy-50 p-3" @if($has) x-data="reveal(@js(route('business.reveal', [$business, $type])))" @endif>
+                                <div class="flex items-center gap-3">
+                                    <span class="flex size-9 shrink-0 items-center justify-center rounded-lg {{ $tone }}"><x-icon :name="$icon" class="size-4" /></span>
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block text-xs text-muted-strong">{{ $label }}</span>
+                                        @unless($has)<span class="block font-medium text-muted">{{ __('directory.na') }}</span>@endunless
+                                    </span>
+                                    @if($has)
+                                        <button type="button" @click="toggle()" :aria-expanded="shown.toString()" :aria-busy="loading"
+                                            class="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-navy-900 px-3 py-1.5 text-xs font-semibold text-gold-200 transition hover:bg-navy-800">
+                                            <x-icon name="eye" class="size-3.5" x-show="!shown" /><x-icon name="eye-off" class="size-3.5" x-show="shown" x-cloak />
+                                            <span x-text="shown ? @js(__('directory.hide')) : @js(__('directory.press_to_view'))">{{ __('directory.press_to_view') }}</span>
+                                        </button>
+                                    @endif
+                                </div>
+                                @if($has)
+                                    <ul x-show="shown" x-collapse x-cloak class="mt-3 space-y-1.5 border-t border-navy-50 pt-3">
+                                        <template x-for="item in items || []" :key="item.value">
+                                            <li class="flex items-center justify-between gap-2">
+                                                <a :href="item.href" @if($type === 'whatsapp') target="_blank" rel="noopener noreferrer" @endif
+                                                    @click="dqTrack(@js($trackUrl), @js($type === 'whatsapp' ? 'whatsapp' : 'call'))"
+                                                    class="truncate font-semibold text-navy-900 hover:text-gold-700" dir="ltr" x-text="item.value"></a>
+                                                <button type="button" @click="copy(item.value)" class="btn-icon size-8 rounded-lg text-muted hover:bg-navy-50 hover:text-navy-900" aria-label="{{ __('directory.copy') }}"><x-icon name="copy" class="size-3.5" /></button>
+                                            </li>
+                                        </template>
+                                    </ul>
+                                @endif
+                            </li>
+                        @endforeach
+                        <li class="flex items-center gap-3 rounded-xl border border-navy-50 p-3">
+                            <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gold-50 text-gold-700"><x-icon name="globe" class="size-4" /></span>
+                            <span class="min-w-0 flex-1">
+                                <span class="block text-xs text-muted-strong">{{ __('directory.labels.website') }}</span>
+                                @if($website)
+                                    <a href="{{ $website }}" target="_blank" rel="noopener noreferrer nofollow" @click="dqTrack(@js($trackUrl), 'website')" class="block truncate font-medium text-navy-900 hover:text-gold-700" dir="ltr">{{ preg_replace('#^https?://(www\.)?#', '', rtrim($website, '/')) }}</a>
+                                @else
+                                    <span class="block font-medium text-muted">{{ __('directory.na') }}</span>
+                                @endif
+                            </span>
+                        </li>
                     </ul>
                     @if($business->socialLinks->isNotEmpty())
                         <div class="mt-5 flex flex-wrap gap-2 border-t border-navy-50 pt-4">
@@ -319,17 +368,20 @@
                                 </div>
                             @endforeach
                         </dl>
+                    @elseif($business->opening_hours_text)
+                        <p class="mt-3 whitespace-pre-line text-sm leading-7 text-charcoal" dir="auto">{{ $business->opening_hours_text }}</p>
                     @else
-                        <p class="mt-3 text-sm text-muted-strong">{{ __('business.hours_not_provided') }}</p>
+                        <p class="mt-3 text-sm font-medium text-muted">{{ __('directory.na') }}</p>
                     @endif
                 </section>
 
                 <section class="card overflow-hidden" aria-labelledby="loc-h">
                     <div class="card-pad pb-4">
                         <h2 id="loc-h" class="font-semibold">{{ __('business.location') }}</h2>
-                        @if($business->t('address') || $business->locationLabel())
-                            <p class="mt-3 flex items-start gap-2 text-sm text-charcoal"><x-icon name="map-pin" class="mt-0.5 size-4 text-gold-600" />{{ $business->t('address') ?: $business->locationLabel() }}</p>
-                        @endif
+                        <dl class="mt-3 space-y-2 text-sm">
+                            <div class="flex items-start gap-2"><x-icon name="map-pin" class="mt-0.5 size-4 shrink-0 text-gold-600" /><dd dir="auto" class="{{ $business->t('address') ? 'text-charcoal' : 'font-medium text-muted' }}">{{ $business->t('address') ?: __('directory.na') }}</dd></div>
+                            <div class="flex items-start gap-2"><x-icon name="compass" class="mt-0.5 size-4 shrink-0 text-gold-600" /><dd class="{{ $business->locationLabel() ? 'text-charcoal' : 'font-medium text-muted' }}">{{ $business->locationLabel() ?? __('directory.na') }}</dd></div>
+                        </dl>
                     </div>
                     @if($business->latitude !== null && $business->longitude !== null)
                         @php $d = 0.006; $bbox = ($business->longitude - $d).','.($business->latitude - $d).','.($business->longitude + $d).','.($business->latitude + $d); @endphp

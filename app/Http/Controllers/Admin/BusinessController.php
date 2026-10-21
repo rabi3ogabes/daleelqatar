@@ -17,16 +17,15 @@ use App\Services\AuditLogger;
 use App\Services\BusinessManager;
 use App\Services\ListingWorkflow;
 use App\Services\MediaService;
-use App\Services\SlugGenerator;
 use App\Services\VerificationService;
 use App\Support\AdminNavigation;
 use App\Support\Directory;
 use App\Support\NavigationData;
 use App\Support\Permissions;
+use App\Support\Sitemap;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -388,6 +387,6 @@ class BusinessController extends Controller
     {
         Directory::flushCounts();
         AdminNavigation::flush();
-        Cache::forget('sitemap.xml');
+        Sitemap::flush();
     }
 }
