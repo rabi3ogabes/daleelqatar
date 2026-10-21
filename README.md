@@ -85,7 +85,7 @@ variables — administrators edit them in *Admin → Settings*.
 
 ## Supabase (database & storage)
 
-A dedicated Supabase project **`daleelqatar`** (ref `uunuojnapwrehvrtozos`, region `ap-south-1`) has been provisioned with
+The production Supabase project (ref `dbgzxsffvmdoxuytfqkz`, region `ap-northeast-1` / Tokyo) has been provisioned with
 the complete schema, reference data and both storage buckets; the security advisor reports no issues. Details,
 the connection string format and the remaining credentials you must copy from the dashboard are in
 [`docs/deployment.md`](docs/deployment.md#1-what-is-already-provisioned-on-supabase).
