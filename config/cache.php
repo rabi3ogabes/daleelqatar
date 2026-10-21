@@ -123,7 +123,7 @@ return [
     */
 
     'edge' => [
-        'enabled' => (bool) env('EDGE_CACHE', env('APP_ENV') === 'production'),
+        'enabled' => (bool) env('EDGE_CACHE', env('APP_ENV', 'production') === 'production'),
         'ttl_factor' => (float) env('EDGE_CACHE_TTL_FACTOR', 1),
     ],
 
