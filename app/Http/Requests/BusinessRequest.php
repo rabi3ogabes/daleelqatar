@@ -33,13 +33,15 @@ class BusinessRequest extends FormRequest
             $website = 'https://'.$website;
         }
 
-        $this->merge([
-            'website' => $website ?: null,
-            'phone' => $this->normalizePhone($this->input('phone')),
-            'whatsapp' => $this->normalizePhone($this->input('whatsapp')),
-            'email' => $this->filled('email') ? mb_strtolower($trim($this->input('email'))) : null,
-            'social' => array_filter((array) $this->input('social', []), fn ($v) => filled($v)),
-        ]);
+        // Only normalise keys that were actually sent, so PATCH requests never wipe omitted fields.
+        $normalized = [
+            'website' => fn () => $website ?: null,
+            'phone' => fn () => $this->normalizePhone($this->input('phone')),
+            'whatsapp' => fn () => $this->normalizePhone($this->input('whatsapp')),
+            'email' => fn () => $this->filled('email') ? mb_strtolower($trim($this->input('email'))) : null,
+            'social' => fn () => array_filter((array) $this->input('social', []), fn ($v) => filled($v)),
+        ];
+        $this->merge(collect($normalized)->filter(fn ($fn, $key) => $this->exists($key))->map(fn ($fn) => $fn())->all());
     }
 
     public function rules(): array

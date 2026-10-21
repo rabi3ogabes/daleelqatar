@@ -66,6 +66,9 @@ class BusinessController extends Controller
             'reviewReportReasons' => ReportReason::forReviews(),
             'openNow' => $business->isOpenNow(),
             'today' => now(Business::TIMEZONE)->dayOfWeek,
+            'distribution' => $business->reviews_count > 0
+                ? $business->approvedReviews()->selectRaw('rating, COUNT(*) AS total')->groupBy('rating')->pluck('total', 'rating')->all()
+                : [],
         ]);
     }
 

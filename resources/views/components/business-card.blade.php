@@ -6,7 +6,7 @@
 @endphp
 @if($layout === 'list')
 <article {{ $attributes->class('group card card-hover relative flex gap-4 overflow-hidden p-3 sm:p-4') }}>
-    <x-business-cover :business="$business" class="aspect-square w-28 shrink-0 rounded-xl sm:w-40" :eager="$eager" sizes="160px" />
+    <x-business-cover :business="$business" class="aspect-[4/3] w-28 shrink-0 self-start rounded-xl sm:w-36" :eager="$eager" sizes="160px" />
     <div class="flex min-w-0 flex-1 flex-col py-1">
         <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
