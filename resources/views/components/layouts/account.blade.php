@@ -4,6 +4,6 @@
     $crumbs = array_merge([['label' => __('account.dashboard.title'), 'url' => route('account.dashboard')]], $breadcrumbs);
 @endphp
 <x-layouts.dashboard :title="$title" :subtitle="$subtitle" area="account" :nav="\App\Support\AccountNavigation::for(auth()->user())" :breadcrumbs="$crumbs">
-    @isset($actions)<x-slot:actions>{{ $actions }}</x-slot:actions>@endisset
+    <x-slot:actions>{{ $actions ?? '' }}</x-slot:actions>
     {{ $slot }}
 </x-layouts.dashboard>

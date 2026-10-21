@@ -108,7 +108,7 @@
         <h3 class="mt-7 mb-3 text-sm font-semibold text-navy-900">{{ __('business.social') }}</h3>
         <div class="grid gap-4 md:grid-cols-2">
             @foreach(\App\Enums\SocialPlatform::cases() as $platform)
-                <x-form.input :name="'social['.$platform->value.']'" type="url" dir="ltr" :icon="$platform->value" :label="$platform->label()" :value="$social[$platform->value] ?? null" placeholder="https://{{ $platform->hosts()[0] }}/…" />
+                <x-form.input :name="'social['.$platform->value.']'" type="url" dir="ltr" :icon="$platform === \App\Enums\SocialPlatform::X ? 'brand-x' : $platform->value" :label="$platform->label()" :value="$social[$platform->value] ?? null" placeholder="https://{{ $platform->hosts()[0] }}/…" />
             @endforeach
         </div>
     </section>
@@ -136,9 +136,9 @@
                             <div class="flex w-full flex-wrap items-center gap-2 md:w-auto">
                                 <template x-for="(p, j) in d.periods" :key="j">
                                     <div class="flex items-center gap-1.5" dir="ltr">
-                                        <input type="time" class="input w-28 py-2" x-model="p.opens" :name="`hours[${d.day}][periods][${j}][opens]`" :aria-label="`${d.label} {{ __('business_form.opens') }}`">
+                                        <input type="time" class="input w-32 py-2" x-model="p.opens" :name="`hours[${d.day}][periods][${j}][opens]`" :aria-label="`${d.label} {{ __('business_form.opens') }}`">
                                         <span class="text-muted">–</span>
-                                        <input type="time" class="input w-28 py-2" x-model="p.closes" :name="`hours[${d.day}][periods][${j}][closes]`" :aria-label="`${d.label} {{ __('business_form.closes') }}`">
+                                        <input type="time" class="input w-32 py-2" x-model="p.closes" :name="`hours[${d.day}][periods][${j}][closes]`" :aria-label="`${d.label} {{ __('business_form.closes') }}`">
                                         <button type="button" x-show="d.periods.length > 1" @click="removePeriod(i, j)" class="btn-icon size-8 text-muted hover:text-danger" aria-label="{{ __('common.remove') }}"><x-icon name="x" class="size-4" /></button>
                                     </div>
                                 </template>

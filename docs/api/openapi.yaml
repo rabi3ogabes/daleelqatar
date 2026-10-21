@@ -1,0 +1,1582 @@
+openapi: 3.1.0
+info:
+  title: Daleel Qatar API
+  version: 1.0.0
+  summary: Versioned REST API for the Daleel Qatar | دليل قطر business directory.
+  description: |
+    JSON API shared by the website backend and the future Flutter mobile app.
+
+    * **Base URL:** `https://daleelqatar.com/api/v1`
+    * **Authentication:** Laravel Sanctum personal access tokens — send `Authorization: Bearer <token>`.
+    * **Language:** send `Accept-Language: ar` (default) or `en`. Localized fields are returned in that
+      language; detail resources also include a `translations` object with both languages.
+    * **Identifiers:** businesses accept a UUID **or** a slug; offers, reviews and claims use UUIDs.
+    * **Errors** always use the envelope `{ "message": string, "code": string, "errors"?: object }`.
+    * **Pagination:** list endpoints return `data`, `links` and `meta` (`current_page`, `per_page`, `total`, `last_page`, …).
+
+    See `docs/api/README.md` for guides, examples and conventions.
+  contact:
+    name: Daleel Qatar
+    url: https://daleelqatar.com
+    email: info@daleelqatar.com
+servers:
+  - url: https://daleelqatar.com/api/v1
+    description: Production
+  - url: http://localhost:8000/api/v1
+    description: Local development
+security: []
+tags:
+  - name: Auth
+  - name: Profile
+  - name: Directory
+  - name: Offers
+  - name: Reviews
+  - name: Favorites
+  - name: Owner — Businesses
+  - name: Owner — Media
+  - name: Owner — Offers
+  - name: Claims
+  - name: Notifications
+  - name: Meta
+
+paths:
+  /openapi.yaml:
+    get:
+      tags: [Meta]
+      summary: This OpenAPI specification
+      operationId: getOpenApi
+      responses:
+        '200':
+          description: YAML document
+          content:
+            application/yaml:
+              schema: { type: string }
+
+  /settings/app:
+    get:
+      tags: [Meta]
+      summary: Public app configuration (brand text, contact, limits)
+      operationId: getAppSettings
+      parameters: [{ $ref: '#/components/parameters/AcceptLanguage' }]
+      responses:
+        '200':
+          description: Settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/AppSettings' }
+
+  # ------------------------------------------------------------------ Auth
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new account and receive a token
+      description: Sends an e-mail verification link. Rate limited (`api-auth`).
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, password_confirmation, device_name]
+              properties:
+                name: { type: string, maxLength: 120, example: Mariam Al-Kuwari }
+                email: { type: string, format: email, example: mariam@example.com }
+                password: { type: string, format: password, minLength: 8 }
+                password_confirmation: { type: string, format: password }
+                device_name: { type: string, maxLength: 100, example: iPhone 16 }
+                locale: { type: string, enum: [ar, en] }
+                phone: { type: string, example: '+97455551234' }
+      responses:
+        '201': { $ref: '#/components/responses/TokenIssued' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Exchange credentials for a bearer token
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, device_name]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+                device_name: { type: string, example: Pixel 9 }
+      responses:
+        '200': { $ref: '#/components/responses/TokenIssued' }
+        '401':
+          description: Invalid credentials (`code = invalid_credentials`)
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: Account suspended (`code = account_suspended`)
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request a password reset link
+      description: Always returns the same message whether or not the e-mail exists (prevents account enumeration).
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [email], properties: { email: { type: string, format: email } } }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke the current token
+      operationId: logout
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /auth/logout-all:
+    post:
+      tags: [Auth]
+      summary: Revoke every token of the current user (all devices)
+      operationId: logoutAll
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /auth/email/resend:
+    post:
+      tags: [Auth]
+      summary: Resend the e-mail verification link
+      operationId: resendVerification
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  # --------------------------------------------------------------- Profile
+  /me:
+    get:
+      tags: [Profile]
+      summary: Current user
+      operationId: getMe
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: User
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/User' } } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    patch:
+      tags: [Profile]
+      summary: Update profile and notification preferences
+      operationId: updateMe
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                phone: { type: [string, 'null'] }
+                locale: { type: string, enum: [ar, en] }
+                notification_preferences:
+                  type: object
+                  properties:
+                    email: { type: boolean }
+                    listing_updates: { type: boolean }
+                    reviews: { type: boolean }
+      responses:
+        '200':
+          description: Updated user
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/User' } } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Profile]
+      summary: Delete the account (requires the password)
+      operationId: deleteMe
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [password], properties: { password: { type: string, format: password } } }
+      responses:
+        '204': { description: Deleted }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /me/password:
+    put:
+      tags: [Profile]
+      summary: Change password (other tokens are revoked)
+      operationId: changePassword
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, password, password_confirmation]
+              properties:
+                current_password: { type: string, format: password }
+                password: { type: string, format: password }
+                password_confirmation: { type: string, format: password }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  # ------------------------------------------------------------- Directory
+  /categories:
+    get:
+      tags: [Directory]
+      summary: Category tree with published-listing counts
+      operationId: listCategories
+      parameters: [{ $ref: '#/components/parameters/AcceptLanguage' }]
+      responses:
+        '200':
+          description: Categories
+          content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Category' } } } } } }
+
+  /categories/{slug}:
+    get:
+      tags: [Directory]
+      summary: A category with its sub-categories
+      operationId: getCategory
+      parameters: [{ $ref: '#/components/parameters/AcceptLanguage' }, { name: slug, in: path, required: true, schema: { type: string }, example: restaurants-cafes }]
+      responses:
+        '200':
+          description: Category
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Category' } } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /municipalities:
+    get:
+      tags: [Directory]
+      summary: Qatar's municipalities and their areas
+      operationId: listMunicipalities
+      parameters: [{ $ref: '#/components/parameters/AcceptLanguage' }]
+      responses:
+        '200':
+          description: Municipalities
+          content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Municipality' } } } } } }
+
+  /municipalities/{slug}:
+    get:
+      tags: [Directory]
+      summary: One municipality with its areas
+      operationId: getMunicipality
+      parameters: [{ $ref: '#/components/parameters/AcceptLanguage' }, { name: slug, in: path, required: true, schema: { type: string }, example: doha }]
+      responses:
+        '200':
+          description: Municipality
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Municipality' } } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /businesses:
+    get:
+      tags: [Directory]
+      summary: Search the directory
+      description: Only approved, published listings are returned. Filters can be combined; results come from PostgreSQL full-text + trigram search with Arabic normalisation.
+      operationId: searchBusinesses
+      parameters:
+        - $ref: '#/components/parameters/AcceptLanguage'
+        - { name: q, in: query, schema: { type: string, maxLength: 120 }, description: Name, service, keyword, category or place name }
+        - { name: category, in: query, schema: { type: string }, description: Category slug (includes its sub-categories) }
+        - { name: municipality, in: query, schema: { type: string }, description: Municipality slug }
+        - { name: area, in: query, schema: { type: string }, description: Area slug }
+        - { name: verified, in: query, schema: { type: string, enum: ['1', '0', 'true', 'false'] } }
+        - { name: open_now, in: query, schema: { type: string, enum: ['1', '0', 'true', 'false'] }, description: Open now in Qatar time (only listings with opening hours) }
+        - { name: featured, in: query, schema: { type: string, enum: ['1', '0', 'true', 'false'] } }
+        - { name: rating, in: query, schema: { type: integer, minimum: 1, maximum: 5 }, description: Minimum average rating }
+        - { name: sort, in: query, schema: { type: string, enum: [relevance, newest, rating, popular, name], default: relevance } }
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Paginated results
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/BusinessSummary' } }
+              example:
+                data:
+                  - id: 9b1d6a3e-5d43-4c6b-9a3f-2b1f2c3d4e5f
+                    slug: sidra-coffee-house
+                    name: مقهى سدرة
+                    tagline: قهوة مختصة في قلب مشيرب
+                    category: { id: 3, slug: cafes, name: مقاهي, icon: utensils }
+                    location: { municipality: { id: 1, slug: doha, name: الدوحة }, area: { id: 3, slug: msheireb, name: مشيرب }, label: مشيرب، الدوحة }
+                    rating: { average: null, count: 0 }
+                    is_verified: false
+                    is_featured: true
+                    is_sample: false
+                    is_open_now: true
+                links: { first: '…?page=1', last: '…?page=1', prev: null, next: null }
+                meta: { current_page: 1, per_page: 12, total: 1, last_page: 1, filters: { sort: relevance, q: قهوة } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /businesses/featured:
+    get:
+      tags: [Directory]
+      summary: Featured listings
+      operationId: featuredBusinesses
+      parameters: [{ $ref: '#/components/parameters/AcceptLanguage' }, { $ref: '#/components/parameters/PerPage' }, { $ref: '#/components/parameters/Page' }]
+      responses:
+        '200':
+          description: Paginated listings
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/BusinessSummary' } } } }
+
+  /businesses/{business}:
+    get:
+      tags: [Directory]
+      summary: Business profile
+      description: Published listings are public. Unpublished listings return 404 unless the bearer token belongs to the owner or authorised staff.
+      operationId: getBusiness
+      parameters: [{ $ref: '#/components/parameters/AcceptLanguage' }, { $ref: '#/components/parameters/BusinessKey' }]
+      security: [{}, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: Business
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Business' } } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /businesses/{business}/reviews:
+    get:
+      tags: [Reviews]
+      summary: Approved reviews of a business
+      operationId: listBusinessReviews
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }, { $ref: '#/components/parameters/PerPage' }, { $ref: '#/components/parameters/Page' }]
+      responses:
+        '200':
+          description: Paginated reviews; `meta.rating` holds the aggregate
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Review' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Reviews]
+      summary: Write a review (verified e-mail required)
+      description: One review per user per business; owners cannot review their own listing. Reviews may be held for moderation.
+      operationId: createReview
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating, body]
+              properties:
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                title: { type: string, maxLength: 150 }
+                body: { type: string, minLength: 20, maxLength: 3000 }
+      responses:
+        '201':
+          description: Created (status `pending` or `approved`)
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnReview' }, message: { type: string } } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/WorkflowOrValidationError' }
+
+  /businesses/{business}/reports:
+    post:
+      tags: [Directory]
+      summary: Report incorrect or abusive listing information
+      operationId: reportBusiness
+      security: [{}, { bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { $ref: '#/components/schemas/ReportReason' }
+                details: { type: string, maxLength: 1500 }
+                reporter_email: { type: string, format: email }
+      responses:
+        '201': { $ref: '#/components/responses/Message' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /businesses/{business}/events:
+    post:
+      tags: [Directory]
+      summary: Record a contact interaction (owner insights)
+      operationId: trackBusinessEvent
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [type], properties: { type: { type: string, enum: [call, whatsapp, website, directions, share] } } }
+      responses:
+        '204': { description: Recorded (duplicates within 10 minutes are ignored) }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /businesses/{business}/claim:
+    post:
+      tags: [Claims]
+      summary: Claim ownership of an unowned listing (verified e-mail required)
+      operationId: claimBusiness
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [claimant_name, phone, email, terms]
+              properties:
+                claimant_name: { type: string }
+                position: { type: string }
+                phone: { type: string }
+                email: { type: string, format: email }
+                message: { type: string }
+                proof: { type: string, format: binary, description: 'PDF/JPG/PNG — stored privately' }
+                terms: { type: boolean }
+      responses:
+        '201':
+          description: Claim submitted
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Claim' }, message: { type: string } } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/WorkflowOrValidationError' }
+
+  /reviews/{review}/report:
+    post:
+      tags: [Reviews]
+      summary: Report a review
+      operationId: reportReview
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ReviewId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, enum: [spam, offensive, fraud, incorrect_info, other] }
+                details: { type: string, maxLength: 1000 }
+      responses:
+        '201': { $ref: '#/components/responses/Message' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/WorkflowOrValidationError' }
+
+  /contact:
+    post:
+      tags: [Meta]
+      summary: Send a message to the Daleel Qatar team
+      operationId: contact
+      security: [{}, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, subject, message]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                phone: { type: string }
+                subject: { type: string }
+                message: { type: string, minLength: 10 }
+      responses:
+        '201': { $ref: '#/components/responses/Message' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  # ---------------------------------------------------------------- Offers
+  /offers:
+    get:
+      tags: [Offers]
+      summary: Live offers (expired offers are never returned)
+      operationId: listOffers
+      parameters:
+        - $ref: '#/components/parameters/AcceptLanguage'
+        - { name: business, in: query, schema: { type: string }, description: Business UUID or slug }
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Paginated offers
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Offer' } } } }
+
+  /offers/{offer}:
+    get:
+      tags: [Offers]
+      summary: A live offer
+      operationId: getOffer
+      parameters: [{ $ref: '#/components/parameters/AcceptLanguage' }, { name: offer, in: path, required: true, schema: { type: string }, description: Offer UUID or slug }]
+      responses:
+        '200':
+          description: Offer
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Offer' } } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ------------------------------------------------------------- Favorites
+  /me/favorites:
+    get:
+      tags: [Favorites]
+      summary: My favourite businesses
+      operationId: listFavorites
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/PerPage' }, { $ref: '#/components/parameters/Page' }]
+      responses:
+        '200':
+          description: Paginated listings
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/BusinessSummary' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/EmailUnverified' }
+
+  /me/favorites/{business}:
+    post:
+      tags: [Favorites]
+      summary: Add to favourites (idempotent)
+      operationId: addFavorite
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      responses:
+        '200': { $ref: '#/components/responses/FavoriteState' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/EmailUnverified' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Favorites]
+      summary: Remove from favourites (idempotent)
+      operationId: removeFavorite
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      responses:
+        '200': { $ref: '#/components/responses/FavoriteState' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # --------------------------------------------------------------- Reviews
+  /me/reviews:
+    get:
+      tags: [Reviews]
+      summary: Reviews I wrote (any status)
+      operationId: myReviews
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Paginated reviews
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/OwnReview' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /me/reviews/{review}:
+    delete:
+      tags: [Reviews]
+      summary: Delete one of my reviews
+      operationId: deleteMyReview
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ReviewId' }]
+      responses:
+        '204': { description: Deleted }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /me/reviews/received:
+    get:
+      tags: [Reviews]
+      summary: Published reviews on businesses I own
+      operationId: receivedReviews
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Paginated reviews
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/OwnReview' } } } }
+        '403': { $ref: '#/components/responses/EmailUnverified' }
+
+  /me/reviews/{review}/reply:
+    post:
+      tags: [Reviews]
+      summary: Reply to a review on my business (empty value removes the reply)
+      operationId: replyToReview
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/ReviewId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { owner_reply: { type: [string, 'null'], maxLength: 2000 } } }
+      responses:
+        '200':
+          description: Updated review
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnReview' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/WorkflowOrValidationError' }
+
+  # ------------------------------------------------------ Owner businesses
+  /me/businesses:
+    get:
+      tags: [Owner — Businesses]
+      summary: My listings (any status)
+      operationId: myBusinesses
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/BusinessStatus' } }
+      responses:
+        '200':
+          description: Paginated listings
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/OwnerBusiness' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/EmailUnverified' }
+    post:
+      tags: [Owner — Businesses]
+      summary: Create a listing (saved as draft)
+      operationId: createBusiness
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BusinessInput' }
+          multipart/form-data:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/BusinessInput'
+                - type: object
+                  properties:
+                    logo: { type: string, format: binary }
+                    cover: { type: string, format: binary }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerBusiness' } } } } }
+        '403': { $ref: '#/components/responses/EmailUnverified' }
+        '422': { $ref: '#/components/responses/WorkflowOrValidationError' }
+
+  /me/businesses/{business}:
+    get:
+      tags: [Owner — Businesses]
+      summary: One of my listings
+      operationId: myBusiness
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      responses:
+        '200':
+          description: Listing
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerBusiness' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Owner — Businesses]
+      summary: Replace listing details
+      operationId: replaceBusiness
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/BusinessInput' } } }
+      responses:
+        '200':
+          description: Updated
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerBusiness' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    patch:
+      tags: [Owner — Businesses]
+      summary: Partially update listing details (omitted fields are untouched)
+      operationId: updateBusiness
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/BusinessInput' } } }
+      responses:
+        '200':
+          description: Updated
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerBusiness' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Owner — Businesses]
+      summary: Delete a draft, rejected or archived listing
+      operationId: deleteBusiness
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      responses:
+        '204': { description: Deleted }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /me/businesses/{business}/submit:
+    post:
+      tags: [Owner — Businesses]
+      summary: Submit a draft/rejected listing for review
+      description: Fails with `workflow_error` if required fields are missing (see `missing_requirements`).
+      operationId: submitBusiness
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      responses:
+        '200':
+          description: Listing (status `pending`, or `approved` when auto-approval is enabled)
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerBusiness' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/WorkflowError' }
+
+  /me/businesses/{business}/archive:
+    post:
+      tags: [Owner — Businesses]
+      summary: Archive a listing (hides it from the directory)
+      operationId: archiveBusiness
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      responses:
+        '200':
+          description: Listing
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerBusiness' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/WorkflowError' }
+
+  /me/businesses/{business}/unarchive:
+    post:
+      tags: [Owner — Businesses]
+      summary: Restore an archived listing to draft
+      operationId: unarchiveBusiness
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      responses:
+        '200':
+          description: Listing
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerBusiness' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ---------------------------------------------------------- Owner media
+  /me/businesses/{business}/logo:
+    post:
+      tags: [Owner — Media]
+      summary: Upload or replace the logo
+      description: Images are re-encoded to WebP server-side (EXIF/GPS metadata removed) and stored in Supabase Storage.
+      operationId: uploadLogo
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { type: object, required: [logo], properties: { logo: { type: string, format: binary } } }
+      responses:
+        '200':
+          description: Listing
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerBusiness' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Owner — Media]
+      summary: Remove the logo
+      operationId: deleteLogo
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      responses:
+        '200':
+          description: Listing
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerBusiness' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /me/businesses/{business}/cover:
+    post:
+      tags: [Owner — Media]
+      summary: Upload or replace the cover image
+      operationId: uploadCover
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { type: object, required: [cover], properties: { cover: { type: string, format: binary } } }
+      responses:
+        '200':
+          description: Listing
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerBusiness' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Owner — Media]
+      summary: Remove the cover image
+      operationId: deleteCover
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      responses:
+        '200':
+          description: Listing
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerBusiness' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /me/businesses/{business}/gallery:
+    post:
+      tags: [Owner — Media]
+      summary: Add gallery images
+      operationId: addGalleryImages
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: ['images[]']
+              properties:
+                'images[]': { type: array, items: { type: string, format: binary } }
+      responses:
+        '201':
+          description: Listing; `meta.added` is the number stored
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerBusiness' }, meta: { type: object, properties: { added: { type: integer } } } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/WorkflowOrValidationError' }
+
+  /me/businesses/{business}/gallery/order:
+    put:
+      tags: [Owner — Media]
+      summary: Reorder gallery images
+      operationId: reorderGallery
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [order], properties: { order: { type: array, items: { type: integer }, description: Image IDs in display order } } }
+      responses:
+        '200':
+          description: Listing
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerBusiness' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /me/businesses/{business}/gallery/{image}:
+    delete:
+      tags: [Owner — Media]
+      summary: Delete a gallery image
+      operationId: deleteGalleryImage
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }, { name: image, in: path, required: true, schema: { type: integer } }]
+      responses:
+        '204': { description: Deleted }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /me/businesses/{business}/verification:
+    post:
+      tags: [Owner — Media]
+      summary: Request the verification badge (approved listings only)
+      description: The document is stored in a private bucket and only reviewed by authorised staff.
+      operationId: requestVerification
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/BusinessKey' }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [document]
+              properties:
+                commercial_registration: { type: string, maxLength: 60 }
+                notes: { type: string }
+                document: { type: string, format: binary, description: PDF, JPG or PNG }
+      responses:
+        '201':
+          description: Request submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: object, properties: { id: { type: string, format: uuid }, status: { type: string }, status_label: { type: string }, created_at: { type: string, format: date-time } } }
+                  message: { type: string }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/WorkflowOrValidationError' }
+
+  # ---------------------------------------------------------- Owner offers
+  /me/offers:
+    get:
+      tags: [Owner — Offers]
+      summary: Offers on my listings
+      operationId: myOffers
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Paginated offers (owner view)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/OwnerOffer' } } } }
+        '403': { $ref: '#/components/responses/EmailUnverified' }
+    post:
+      tags: [Owner — Offers]
+      summary: Create an offer on one of my approved listings
+      operationId: createOffer
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OfferInput' }
+          multipart/form-data:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/OfferInput'
+                - { type: object, properties: { image: { type: string, format: binary } } }
+      responses:
+        '201':
+          description: Created (status `pending` when moderation is required)
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerOffer' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /me/offers/{offer}:
+    get:
+      tags: [Owner — Offers]
+      summary: One of my offers
+      operationId: myOffer
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/OfferId' }]
+      responses:
+        '200':
+          description: Offer
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerOffer' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Owner — Offers]
+      summary: Update an offer
+      operationId: replaceOffer
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/OfferId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/OfferInput' } } }
+      responses:
+        '200':
+          description: Offer
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerOffer' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    patch:
+      tags: [Owner — Offers]
+      summary: Partially update an offer (content edits may return it to moderation)
+      operationId: updateOffer
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/OfferId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/OfferInput' } } }
+      responses:
+        '200':
+          description: Offer
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/OwnerOffer' } } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Owner — Offers]
+      summary: Delete an offer
+      operationId: deleteOffer
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/OfferId' }]
+      responses:
+        '204': { description: Deleted }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ---------------------------------------------------------------- Claims
+  /me/claims:
+    get:
+      tags: [Claims]
+      summary: My ownership claims
+      operationId: myClaims
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Paginated claims
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Claim' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  # --------------------------------------------------------- Notifications
+  /me/notifications:
+    get:
+      tags: [Notifications]
+      summary: My notifications (newest first)
+      operationId: listNotifications
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: unread, in: query, schema: { type: string, enum: ['1', '0'] } }, { $ref: '#/components/parameters/Page' }]
+      responses:
+        '200':
+          description: Paginated notifications; `meta.unread_count`
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Paginated'
+                  - { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Notification' } } } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /me/notifications/{id}/read:
+    post:
+      tags: [Notifications]
+      summary: Mark one notification as read
+      operationId: readNotification
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: Notification
+          content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Notification' } } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /me/notifications/read-all:
+    post:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      operationId: readAllNotifications
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum personal access token
+
+  parameters:
+    AcceptLanguage:
+      name: Accept-Language
+      in: header
+      schema: { type: string, enum: [ar, en], default: ar }
+      description: Response language. Arabic when absent.
+    BusinessKey:
+      name: business
+      in: path
+      required: true
+      schema: { type: string }
+      description: Business UUID or slug
+      example: sidra-coffee-house
+    OfferId:
+      name: offer
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ReviewId:
+      name: review
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PerPage:
+      name: per_page
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 48, default: 12 }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+
+  responses:
+    TokenIssued:
+      description: Token issued
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+                  token: { type: string, example: '12|kD9x…' }
+                  token_type: { type: string, example: Bearer }
+                  expires_at: { type: [string, 'null'], format: date-time }
+    Message:
+      description: Success message
+      content:
+        application/json:
+          schema: { type: object, properties: { message: { type: string } } }
+    FavoriteState:
+      description: Favourite state
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { type: object, properties: { business_id: { type: string, format: uuid }, favorited: { type: boolean } } }
+              message: { type: string }
+    ValidationError:
+      description: Validation failed (`code = validation_failed`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { message: The given data was invalid., code: validation_failed, errors: { email: [The email field is required.] } }
+    WorkflowError:
+      description: A business rule prevented the action (`code = workflow_error`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { message: 'Please complete the following before submitting: English description', code: workflow_error }
+    WorkflowOrValidationError:
+      description: Validation (`validation_failed`) or business-rule (`workflow_error`) failure
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Unauthenticated:
+      description: Missing or invalid token (`code = unauthenticated`)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: Not allowed (`forbidden`, `account_suspended` or `email_unverified`)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    EmailUnverified:
+      description: E-mail address not verified (`code = email_unverified`)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: Not found (`code = not_found`)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    TooManyRequests:
+      description: Rate limit exceeded (`code = too_many_requests`); see `Retry-After`
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  schemas:
+    Error:
+      type: object
+      required: [message, code]
+      properties:
+        message: { type: string }
+        code:
+          type: string
+          enum: [validation_failed, workflow_error, unauthenticated, invalid_credentials, forbidden, account_suspended, email_unverified, not_found, too_many_requests, http_error, server_error]
+        errors:
+          type: object
+          additionalProperties: { type: array, items: { type: string } }
+
+    Paginated:
+      type: object
+      properties:
+        links:
+          type: object
+          properties:
+            first: { type: [string, 'null'] }
+            last: { type: [string, 'null'] }
+            prev: { type: [string, 'null'] }
+            next: { type: [string, 'null'] }
+        meta:
+          type: object
+          properties:
+            current_page: { type: integer }
+            from: { type: [integer, 'null'] }
+            last_page: { type: integer }
+            path: { type: string }
+            per_page: { type: integer }
+            to: { type: [integer, 'null'] }
+            total: { type: integer }
+
+    Translation:
+      type: object
+      properties:
+        ar: { type: [string, 'null'] }
+        en: { type: [string, 'null'] }
+
+    AppSettings:
+      type: object
+      properties:
+        brand:
+          type: object
+          properties:
+            name: { $ref: '#/components/schemas/Translation' }
+            slogan: { $ref: '#/components/schemas/Translation' }
+            subtitle: { $ref: '#/components/schemas/Translation' }
+            logo_url: { type: string, format: uri }
+            icon_url: { type: string, format: uri }
+        contact: { type: object, properties: { email: { type: [string, 'null'] }, phone: { type: [string, 'null'] }, whatsapp: { type: [string, 'null'] } } }
+        social: { type: object, additionalProperties: { type: string, format: uri } }
+        locales: { type: object, properties: { supported: { type: array, items: { type: string } }, default: { type: string } } }
+        timezone: { type: string, example: Asia/Qatar }
+        currency: { type: string, example: QAR }
+        reviews: { type: object, properties: { enabled: { type: boolean }, require_moderation: { type: boolean }, min_length: { type: integer }, owner_replies: { type: boolean } } }
+        uploads: { type: object, properties: { max_image_kb: { type: integer }, max_document_kb: { type: integer }, max_gallery_images: { type: integer }, image_types: { type: array, items: { type: string } }, document_types: { type: array, items: { type: string } } } }
+        api: { type: object, properties: { version: { type: string } } }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: [string, 'null'] }
+        locale: { type: string, enum: [ar, en] }
+        avatar_url: { type: [string, 'null'], format: uri }
+        email_verified: { type: boolean }
+        email_verified_at: { type: [string, 'null'], format: date-time }
+        roles: { type: array, items: { type: string, enum: [super-admin, admin, moderator, business-owner, user] } }
+        is_business_owner: { type: boolean }
+        notification_preferences: { type: object, properties: { email: { type: boolean }, listing_updates: { type: boolean }, reviews: { type: boolean } } }
+        created_at: { type: string, format: date-time }
+
+    Category:
+      type: object
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        icon: { type: [string, 'null'] }
+        image_url: { type: [string, 'null'], format: uri }
+        parent_id: { type: [integer, 'null'] }
+        is_featured: { type: boolean }
+        businesses_count: { type: integer, description: Published listings (top-level categories include their sub-categories) }
+        children: { type: array, items: { $ref: '#/components/schemas/Category' } }
+        translations: { type: object, properties: { name: { $ref: '#/components/schemas/Translation' }, description: { $ref: '#/components/schemas/Translation' } } }
+
+    Area:
+      type: object
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        name: { type: string }
+        municipality_id: { type: integer }
+        latitude: { type: [number, 'null'] }
+        longitude: { type: [number, 'null'] }
+        is_featured: { type: boolean }
+        translations: { type: object, properties: { name: { $ref: '#/components/schemas/Translation' } } }
+
+    Municipality:
+      type: object
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        name: { type: string }
+        latitude: { type: [number, 'null'] }
+        longitude: { type: [number, 'null'] }
+        is_featured: { type: boolean }
+        businesses_count: { type: integer }
+        areas: { type: array, items: { $ref: '#/components/schemas/Area' } }
+        translations: { type: object, properties: { name: { $ref: '#/components/schemas/Translation' } } }
+
+    BusinessStatus:
+      type: string
+      enum: [draft, pending, approved, rejected, suspended, archived]
+
+    ReportReason:
+      type: string
+      enum: [incorrect_info, closed, duplicate, spam, offensive, fraud, other]
+
+    BusinessSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        tagline: { type: [string, 'null'] }
+        category: { type: object, properties: { id: { type: integer }, slug: { type: string }, name: { type: string }, icon: { type: [string, 'null'] } } }
+        location:
+          type: object
+          properties:
+            municipality: { type: [object, 'null'], properties: { id: { type: integer }, slug: { type: string }, name: { type: string } } }
+            area: { type: [object, 'null'], properties: { id: { type: integer }, slug: { type: string }, name: { type: string } } }
+            label: { type: [string, 'null'] }
+        logo_url: { type: [string, 'null'], format: uri }
+        cover_url: { type: [string, 'null'], format: uri }
+        image_url: { type: [string, 'null'], format: uri }
+        rating: { type: object, properties: { average: { type: [number, 'null'] }, count: { type: integer } }, description: Only genuine, moderated reviews are counted }
+        is_verified: { type: boolean }
+        is_featured: { type: boolean }
+        is_sample: { type: boolean, description: True for development sample data }
+        is_open_now: { type: [boolean, 'null'], description: Null when the business has not provided opening hours }
+        published_at: { type: [string, 'null'], format: date-time }
+        web_url: { type: [string, 'null'], format: uri }
+
+    Business:
+      allOf:
+        - $ref: '#/components/schemas/BusinessSummary'
+        - type: object
+          properties:
+            description: { type: [string, 'null'] }
+            keywords: { type: [string, 'null'] }
+            address: { type: [string, 'null'] }
+            coordinates: { type: [object, 'null'], properties: { latitude: { type: number }, longitude: { type: number } } }
+            contact:
+              type: object
+              properties:
+                phone: { type: [string, 'null'] }
+                whatsapp: { type: [string, 'null'] }
+                whatsapp_url: { type: [string, 'null'], format: uri }
+                email: { type: [string, 'null'] }
+                website: { type: [string, 'null'], format: uri }
+                directions_url: { type: [string, 'null'], format: uri }
+            social_links: { type: array, items: { type: object, properties: { platform: { type: string, enum: [instagram, x, facebook, tiktok, snapchat, linkedin, youtube] }, url: { type: string, format: uri } } } }
+            opening_hours:
+              type: array
+              items:
+                type: object
+                properties:
+                  day_of_week: { type: integer, minimum: 0, maximum: 6, description: 0 = Sunday }
+                  opens_at: { type: [string, 'null'], example: '09:00' }
+                  closes_at: { type: [string, 'null'], example: '22:00', description: Earlier than opens_at when the period runs past midnight }
+                  is_closed: { type: boolean }
+                  is_all_day: { type: boolean }
+            timezone: { type: string, example: Asia/Qatar }
+            services: { type: array, items: { type: object, properties: { name: { type: string }, description: { type: [string, 'null'] }, price_from: { type: [number, 'null'] }, currency: { type: string }, translations: { type: object } } } }
+            gallery: { type: array, items: { type: object, properties: { id: { type: integer }, url: { type: string, format: uri }, width: { type: [integer, 'null'] }, height: { type: [integer, 'null'] }, caption: { type: [string, 'null'] } } } }
+            secondary_categories: { type: array, items: { type: object, properties: { id: { type: integer }, slug: { type: string }, name: { type: string } } } }
+            offers: { type: array, items: { $ref: '#/components/schemas/Offer' } }
+            favorites_count: { type: integer }
+            is_favorited: { type: [boolean, 'null'], description: Null for anonymous requests }
+            translations:
+              type: object
+              properties:
+                name: { $ref: '#/components/schemas/Translation' }
+                tagline: { $ref: '#/components/schemas/Translation' }
+                description: { $ref: '#/components/schemas/Translation' }
+                address: { $ref: '#/components/schemas/Translation' }
+
+    OwnerBusiness:
+      allOf:
+        - $ref: '#/components/schemas/Business'
+        - type: object
+          properties:
+            status: { $ref: '#/components/schemas/BusinessStatus' }
+            status_label: { type: string }
+            rejection_reason: { type: [string, 'null'] }
+            missing_requirements: { type: array, items: { type: string }, description: Human-readable fields required before submission }
+            can_submit: { type: boolean }
+            submitted_at: { type: [string, 'null'], format: date-time }
+            approved_at: { type: [string, 'null'], format: date-time }
+            views_count: { type: integer }
+            category_id: { type: integer }
+            municipality_id: { type: [integer, 'null'] }
+            area_id: { type: [integer, 'null'] }
+            meta: { type: object, properties: { title: { $ref: '#/components/schemas/Translation' }, description: { $ref: '#/components/schemas/Translation' } } }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+
+    BusinessInput:
+      type: object
+      description: Required on create/PUT — name_ar, name_en, category_id. PATCH accepts any subset. Description, municipality and one contact method are required before submission.
+      properties:
+        name_ar: { type: string, maxLength: 160 }
+        name_en: { type: string, maxLength: 160 }
+        tagline_ar: { type: [string, 'null'], maxLength: 200 }
+        tagline_en: { type: [string, 'null'], maxLength: 200 }
+        description_ar: { type: [string, 'null'], maxLength: 5000 }
+        description_en: { type: [string, 'null'], maxLength: 5000 }
+        keywords: { type: [string, 'null'], maxLength: 500 }
+        category_id: { type: integer }
+        category_ids: { type: array, maxItems: 3, items: { type: integer }, description: Secondary categories }
+        municipality_id: { type: [integer, 'null'] }
+        area_id: { type: [integer, 'null'], description: Must belong to municipality_id }
+        address_ar: { type: [string, 'null'] }
+        address_en: { type: [string, 'null'] }
+        latitude: { type: [number, 'null'], minimum: 24.3, maximum: 26.3 }
+        longitude: { type: [number, 'null'], minimum: 50.6, maximum: 51.8 }
+        phone: { type: [string, 'null'], description: Local 8-digit numbers get +974 automatically }
+        whatsapp: { type: [string, 'null'] }
+        email: { type: [string, 'null'], format: email }
+        website: { type: [string, 'null'], format: uri }
+        meta_title_ar: { type: [string, 'null'] }
+        meta_title_en: { type: [string, 'null'] }
+        meta_description_ar: { type: [string, 'null'] }
+        meta_description_en: { type: [string, 'null'] }
+        social:
+          type: object
+          description: Official profile URLs only
+          properties:
+            instagram: { type: string, format: uri }
+            x: { type: string, format: uri }
+            facebook: { type: string, format: uri }
+            tiktok: { type: string, format: uri }
+            snapchat: { type: string, format: uri }
+            linkedin: { type: string, format: uri }
+            youtube: { type: string, format: uri }
+        hours:
+          type: object
+          description: Keys are days 0 (Sunday) … 6 (Saturday). Omitted days mean "not provided".
+          additionalProperties:
+            type: object
+            properties:
+              closed: { type: boolean }
+              all_day: { type: boolean }
+              periods: { type: array, maxItems: 2, items: { type: object, properties: { opens: { type: string, example: '09:00' }, closes: { type: string, example: '22:00' } } } }
+          example: { '0': { periods: [{ opens: '08:00', closes: '22:00' }] }, '5': { closed: true } }
+        services:
+          type: array
+          maxItems: 30
+          items:
+            type: object
+            properties:
+              name_ar: { type: string }
+              name_en: { type: string }
+              description_ar: { type: string }
+              description_en: { type: string }
+              price_from: { type: number, minimum: 0 }
+
+    Offer:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        title: { type: string }
+        description: { type: [string, 'null'] }
+        discount_label: { type: [string, 'null'], example: 20% }
+        terms: { type: [string, 'null'] }
+        image_url: { type: [string, 'null'], format: uri }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        is_live: { type: boolean }
+        is_featured: { type: boolean }
+        business: { type: [object, 'null'], properties: { id: { type: string, format: uuid }, slug: { type: string }, name: { type: string } } }
+        translations: { type: object, properties: { title: { $ref: '#/components/schemas/Translation' }, description: { $ref: '#/components/schemas/Translation' }, discount_label: { $ref: '#/components/schemas/Translation' }, terms: { $ref: '#/components/schemas/Translation' } } }
+
+    OwnerOffer:
+      allOf:
+        - $ref: '#/components/schemas/Offer'
+        - type: object
+          properties:
+            status: { type: string, enum: [draft, pending, approved, rejected] }
+            status_label: { type: string }
+            is_active: { type: boolean }
+            rejection_reason: { type: [string, 'null'] }
+            views_count: { type: integer }
+            created_at: { type: string, format: date-time }
+
+    OfferInput:
+      type: object
+      description: business_id (UUID or slug), titles, starts_at and ends_at are required on create.
+      properties:
+        business_id: { type: string, description: Create only }
+        title_ar: { type: string, maxLength: 160 }
+        title_en: { type: string, maxLength: 160 }
+        description_ar: { type: [string, 'null'] }
+        description_en: { type: [string, 'null'] }
+        discount_label_ar: { type: [string, 'null'], maxLength: 40 }
+        discount_label_en: { type: [string, 'null'], maxLength: 40 }
+        terms_ar: { type: [string, 'null'] }
+        terms_en: { type: [string, 'null'] }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        is_active: { type: boolean }
+        save_as_draft: { type: boolean }
+        submit: { type: boolean, description: Submit a draft for moderation }
+
+    Review:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        title: { type: [string, 'null'] }
+        body: { type: string }
+        locale: { type: string }
+        author: { type: object, properties: { name: { type: string, description: First name and initial only } } }
+        owner_reply: { type: [string, 'null'] }
+        owner_replied_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+
+    OwnReview:
+      allOf:
+        - $ref: '#/components/schemas/Review'
+        - type: object
+          properties:
+            status: { type: string, enum: [pending, approved, rejected, hidden] }
+            status_label: { type: string }
+            business: { type: object, properties: { id: { type: string, format: uuid }, slug: { type: string }, name: { type: string } } }
+
+    Claim:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, approved, rejected, cancelled] }
+        status_label: { type: string }
+        business: { type: object, properties: { id: { type: string, format: uuid }, slug: { type: string }, name: { type: string } } }
+        claimant_name: { type: string }
+        position: { type: [string, 'null'] }
+        has_proof: { type: boolean }
+        decision_note: { type: [string, 'null'] }
+        reviewed_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+
+    Notification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, example: listing.approved }
+        title: { type: string }
+        body: { type: string }
+        icon: { type: [string, 'null'] }
+        route: { type: [string, 'null'], description: Web route name for deep-linking }
+        params: { type: object }
+        web_url: { type: [string, 'null'], format: uri }
+        read_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }

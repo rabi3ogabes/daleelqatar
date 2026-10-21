@@ -295,7 +295,7 @@
                     @if($business->socialLinks->isNotEmpty())
                         <div class="mt-5 flex flex-wrap gap-2 border-t border-navy-50 pt-4">
                             @foreach($business->socialLinks as $link)
-                                <a href="{{ $link->url }}" target="_blank" rel="noopener noreferrer nofollow" class="flex size-10 items-center justify-center rounded-xl bg-navy-900 text-gold-300 transition hover:bg-gold-400 hover:text-navy-950"><x-icon :name="$link->platform->value" class="size-4.5" /><span class="sr-only">{{ $link->platform->label() }}</span></a>
+                                <a href="{{ $link->url }}" target="_blank" rel="noopener noreferrer nofollow" class="flex size-10 items-center justify-center rounded-xl bg-navy-900 text-gold-300 transition hover:bg-gold-400 hover:text-navy-950"><x-icon :name="$link->platform === \App\Enums\SocialPlatform::X ? 'brand-x' : $link->platform->value" class="size-4.5" /><span class="sr-only">{{ $link->platform->label() }}</span></a>
                             @endforeach
                         </div>
                     @endif

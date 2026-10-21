@@ -14,6 +14,9 @@ use Illuminate\Support\Facades\DB;
 
 class OfferService
 {
+    /** Workflow flags accepted in $data that are not model attributes. */
+    private const CONTROL_KEYS = ['save_as_draft', 'submit', 'is_featured'];
+
     public function __construct(
         private readonly SlugGenerator $slugs,
         private readonly MediaService $media,
@@ -24,7 +27,7 @@ class OfferService
     public function create(Business $business, User $actor, array $data, ?UploadedFile $image = null): Offer
     {
         return DB::transaction(function () use ($business, $actor, $data, $image) {
-            $offer = new Offer($data);
+            $offer = new Offer(\Illuminate\Support\Arr::except($data, self::CONTROL_KEYS));
             $offer->business_id = $business->id;
             $offer->created_by = $actor->id;
             $offer->slug = $this->slugs->unique(Offer::class, $data['title_en'] ?? $data['title_ar']);
@@ -51,7 +54,7 @@ class OfferService
     {
         return DB::transaction(function () use ($offer, $actor, $data, $image) {
             $original = $offer->getAttributes();
-            $offer->fill($data);
+            $offer->fill(\Illuminate\Support\Arr::except($data, self::CONTROL_KEYS));
             if ($actor->isStaff() && array_key_exists('is_featured', $data)) {
                 $offer->is_featured = (bool) $data['is_featured'];
             }

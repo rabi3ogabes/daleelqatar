@@ -14,7 +14,7 @@
                     <div class="mt-6 flex items-center gap-2" aria-label="{{ __('footer.follow') }}">
                         @foreach($socials as $platform => $url)
                             <a href="{{ $url }}" target="_blank" rel="noopener noreferrer" class="flex size-10 items-center justify-center rounded-xl bg-white/5 text-white/80 ring-1 ring-white/10 transition hover:bg-gold-400 hover:text-navy-950">
-                                <x-icon :name="$platform" class="size-4.5" /><span class="sr-only">{{ ucfirst($platform) }}</span>
+                                <x-icon :name="$platform === 'x' ? 'brand-x' : $platform" class="size-4.5" /><span class="sr-only">{{ ucfirst($platform) }}</span>
                             </a>
                         @endforeach
                     </div>

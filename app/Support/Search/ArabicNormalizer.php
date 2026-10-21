@@ -33,8 +33,14 @@ final class ArabicNormalizer
         return preg_replace('/\s+/u', ' ', $text) ?? $text;
     }
 
+    /**
+     * SQL equivalent. Characters are emitted as chr(<codepoint>) so the generated
+     * SQL is pure ASCII (portable across clients, dumps and migration tools).
+     */
     public static function sql(string $expression): string
     {
-        return sprintf("translate(lower(%s), '%s', '%s')", $expression, self::FROM, self::TO);
+        $chars = fn (string $s) => '('.implode('||', array_map(fn ($c) => 'chr('.mb_ord($c).')', mb_str_split($s))).')';
+
+        return sprintf('translate(lower(%s), %s, %s)', $expression, $chars(self::FROM), $chars(self::TO));
     }
 }

@@ -66,7 +66,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 $e instanceof AuthorizationException => [403, 'forbidden', __('api.forbidden'), null],
                 $e instanceof ModelNotFoundException, $e instanceof NotFoundHttpException => [404, 'not_found', __('api.not_found'), null],
                 $e instanceof ThrottleRequestsException => [429, 'too_many_requests', __('api.too_many_requests'), null],
-                $e instanceof HttpExceptionInterface => [$e->getStatusCode(), $e->getStatusCode() === 403 ? 'forbidden' : 'http_error', $e->getMessage() ?: __('api.error'), null],
+                // Policy denials surface as AccessDeniedHttpException with an English framework message.
+                $e instanceof HttpExceptionInterface && $e->getStatusCode() === 403 => [403, 'forbidden', __('api.forbidden'), null],
+                $e instanceof HttpExceptionInterface && $e->getStatusCode() === 404 => [404, 'not_found', __('api.not_found'), null],
+                $e instanceof HttpExceptionInterface => [$e->getStatusCode(), 'http_error', $e->getMessage() ?: __('api.error'), null],
                 default => [500, 'server_error', config('app.debug') ? $e->getMessage() : __('api.server_error'), null],
             };
 
