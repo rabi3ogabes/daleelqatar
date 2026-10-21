@@ -230,6 +230,10 @@
         {{-- Actions --}}
         <aside class="space-y-6">
             @if(! $business->trashed())
+                @can('businesses.update')
+                    @include('admin.businesses.partials.logo-studio')
+                @endcan
+
                 @can('businesses.moderate')
                     <x-dash.panel :title="__('admin.businesses.moderation')">
                         <div class="space-y-2" x-data="{ open: null }">

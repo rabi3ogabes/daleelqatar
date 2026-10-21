@@ -1,7 +1,8 @@
 import Alpine from 'alpinejs';
 import collapse from '@alpinejs/collapse';
 import focus from '@alpinejs/focus';
-import { beacon, postJson } from './bootstrap';
+import { beacon, postForm, postJson } from './bootstrap';
+import { drawLogo, monogram, rasterizeSvg, STYLE_NAMES, toBlob } from './logo-designer';
 
 Alpine.plugin(collapse);
 Alpine.plugin(focus);
@@ -534,6 +535,114 @@ Alpine.data('enrichmentRunner', (cfg) => ({
     },
     stop() {
         this.stopping = true;
+    },
+}));
+
+/* Admin logo studio: find the real logo on the company website or design a branded one. */
+Alpine.data('logoStudio', (cfg) => ({
+    cfg,
+    open: false,
+    tab: 'website',
+    searching: false,
+    searched: false,
+    sites: [],
+    candidates: [],
+    message: '',
+    error: '',
+    selected: null,
+    styles: STYLE_NAMES,
+    previews: {},
+    initials: '',
+    showArabic: true,
+    saving: false,
+    renderTimer: null,
+    init() {
+        this.initials = monogram(this.primaryName());
+        this.$watch('initials', () => this.scheduleRender());
+        this.$watch('showArabic', () => this.scheduleRender());
+    },
+    primaryName() {
+        return this.cfg.nameEn || this.cfg.nameAr || '';
+    },
+    secondaryName() {
+        return this.cfg.nameEn && this.cfg.nameAr && this.showArabic ? this.cfg.nameAr : '';
+    },
+    show(tab) {
+        this.open = true;
+        this.switchTab(tab);
+    },
+    close() {
+        if (!this.saving) this.open = false;
+    },
+    switchTab(tab) {
+        this.tab = tab;
+        this.selected = null;
+        if (tab === 'website' && !this.searched && !this.searching) this.search();
+        if (tab === 'design') this.$nextTick(() => this.renderAll());
+    },
+    async search() {
+        Object.assign(this, { searching: true, error: '', message: '', candidates: [], selected: null });
+        try {
+            const r = await postJson(this.cfg.findUrl);
+            this.sites = r.sites || [];
+            this.candidates = r.candidates || [];
+            this.message = r.message || '';
+            if (this.candidates.length === 1) this.selected = { type: 'candidate', id: this.candidates[0].id };
+        } catch (err) {
+            this.error = err.message || this.cfg.i18n.failed;
+        } finally {
+            this.searching = false;
+            this.searched = true;
+        }
+    },
+    scheduleRender() {
+        clearTimeout(this.renderTimer);
+        this.renderTimer = setTimeout(() => this.renderAll(), 120);
+    },
+    async renderAll() {
+        if (this.tab !== 'design') return;
+        const opts = { name: this.primaryName(), secondary: this.secondaryName(), initials: this.initials.trim() };
+        for (const style of this.styles) {
+            const canvas = document.createElement('canvas');
+            await drawLogo(canvas, { ...opts, style });
+            this.previews[style] = canvas.toDataURL('image/png');
+        }
+        if (!this.selected) this.selected = { type: 'style', id: 'navy' };
+    },
+    isSelected(type, id) {
+        return this.selected?.type === type && this.selected?.id === id;
+    },
+    async save() {
+        if (!this.selected || this.saving) return;
+        this.saving = true;
+        this.error = '';
+        try {
+            let r;
+            if (this.selected.type === 'candidate') {
+                const c = this.candidates.find((x) => x.id === this.selected.id);
+                if (c.kind === 'raster') {
+                    r = await postJson(this.cfg.applyUrl, { candidate: c.id, origin: 'website' });
+                } else {
+                    const fd = new FormData();
+                    fd.append('logo', await rasterizeSvg(c.preview), 'logo.png');
+                    fd.append('origin', 'website');
+                    fd.append('source_url', c.url || '');
+                    r = await postForm(this.cfg.applyUrl, fd);
+                }
+            } else {
+                const canvas = document.createElement('canvas');
+                await drawLogo(canvas, { style: this.selected.id, name: this.primaryName(), secondary: this.secondaryName(), initials: this.initials.trim() });
+                const fd = new FormData();
+                fd.append('logo', await toBlob(canvas), 'logo.png');
+                fd.append('origin', 'generated');
+                fd.append('style', this.selected.id);
+                r = await postForm(this.cfg.applyUrl, fd);
+            }
+            window.location.assign(r.redirect);
+        } catch (err) {
+            this.error = err.message || this.cfg.i18n.failed;
+            this.saving = false;
+        }
     },
 }));
 
