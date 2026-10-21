@@ -8,16 +8,33 @@
         "api/index.php": {
             "runtime": "vercel-php@0.8.0",
             "maxDuration": 30,
-            "excludeFiles": "{.git/**,vendor/**/.git/**,vendor/*/*/tests/**,.github/**,.vercel/**,node_modules/**,tests/**,docs/*.md,docs/api/README.md,storage/**,resources/css/**,resources/js/**,vercel.json,.vercelignore,phpunit.xml,package.json,package-lock.json,vite.config.js,README.md}"
+            "excludeFiles": "{.git/**,.vercel/**,node_modules/**,tests/**,vendor/**/.git/**,vendor/*/*/tests/**,resources/css/**,resources/js/**,vercel.json,.vercelignore,package.json,package-lock.json,vite.config.js}"
         }
     },
     "routes": [
-        { "src": "/index\\.php", "dest": "/api/index.php" },
-        { "src": "/build/(.*)", "headers": { "Cache-Control": "public, max-age=31536000, immutable" }, "continue": true },
-        { "handle": "filesystem" },
-        { "src": "/(.*)", "dest": "/api/index.php" }
+        {
+            "src": "/index\\.php",
+            "dest": "/api/index.php"
+        },
+        {
+            "src": "/build/(.*)",
+            "headers": {
+                "Cache-Control": "public, max-age=31536000, immutable"
+            },
+            "continue": true
+        },
+        {
+            "handle": "filesystem"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "/api/index.php"
+        }
     ],
     "crons": [
-        { "path": "/cron/maintenance", "schedule": "0 3 * * *" }
+        {
+            "path": "/cron/maintenance",
+            "schedule": "0 3 * * *"
+        }
     ]
 }
