@@ -57,6 +57,8 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: mbstring, intl, gd, exif, fileinfo, pdo, pdo_pgsql, pgsql, zip, curl
           coverage: none
+          # Matches the Vercel PHP runtime, where short_open_tag is on.
+          ini-values: short_open_tag=On
 
       - name: Setup Node
         uses: actions/setup-node@v4

@@ -48,7 +48,52 @@ php artisan migrate:status      # all migrations show "Ran"
 php artisan tinker --execute="echo App\Models\Category::count();"   # 77
 ```
 
-## 2. Server requirements
+## 2. Vercel (serverless)
+
+The repository deploys to Vercel as-is: `vercel.json` sends every request that is not a static file in `public/`
+to one PHP function, `api/index.php`, built with the community runtime
+[`vercel-php@0.8.0`](https://github.com/vercel-community/php) (PHP 8.4, with `gd`/WebP, `pdo_pgsql` and `intl`).
+
+| Piece | How it works on Vercel |
+|---|---|
+| Static files | `npm run build` writes Vite assets to `public/build`; everything in `public/` is served by Vercel's CDN (`/build/*` cached for a year). |
+| PHP | `api/index.php` boots Laravel. The bundle is read-only, so it moves storage, compiled views and bootstrap caches to `/tmp`. It also sets serverless defaults (`LOG_CHANNEL=stderr`, `QUEUE_CONNECTION=sync`, database sessions/cache, Supabase media disks). Any variable set in the Vercel project overrides these defaults. |
+| Composer | The runtime runs `composer install --no-dev`, then `composer run vercel`, which builds the assets if they are missing. |
+| Scheduler | There is no long-running process, so a Vercel Cron Job calls `GET /cron/maintenance` daily at 03:00 UTC. It runs `daleel:sitemap`, `sanctum:prune-expired`, `queue:prune-failed`, `auth:clear-resets` and `model:prune`. Vercel authenticates with `Authorization: Bearer $CRON_SECRET`; without `CRON_SECRET` the endpoint returns 404. |
+| Files | Uploads go to Supabase Storage (`MEDIA_DISK=supabase`). Nothing written to the function's disk survives the request. |
+| Mail | Sent synchronously during the request. Configure a transactional provider (SMTP / Postmark / Resend) through the `MAIL_*` variables. |
+
+### Environment variables (Project → Settings → Environment Variables)
+
+| Variable | Value | Notes |
+|---|---|---|
+| `APP_KEY` | `base64:…` | `php artisan key:generate --show`. Mark it *Sensitive*. Changing it logs everyone out. |
+| `CRON_SECRET` | random string (16+ characters) | Vercel sends it to the cron endpoint automatically. *Sensitive*, Production. |
+| `APP_URL` | `https://daleelqatar.com` | Optional. Defaults to the production `*.vercel.app` URL. |
+| `DB_HOST` | `aws-?-ap-south-1.pooler.supabase.com` | Copy it from Supabase → **Connect** → *Session pooler*. Vercel has no IPv6, so use the session pooler (port 5432), **not** `db.<ref>.supabase.co`. Do not use the transaction pooler: it drops the per-session `search_path`. |
+| `DB_PORT` | `5432` | |
+| `DB_DATABASE` | `postgres` | |
+| `DB_USERNAME` | `postgres.uunuojnapwrehvrtozos` | Pooler user name: the `postgres.` prefix and the project ref. |
+| `DB_PASSWORD` | database password | *Sensitive*. |
+| `SUPABASE_URL` | `https://uunuojnapwrehvrtozos.supabase.co` | |
+| `SUPABASE_SERVICE_ROLE_KEY` | secret key | *Sensitive*. Server-side only (Storage uploads and signed URLs). |
+| `MAIL_*` | your mail provider | Optional until email delivery is needed. The default `log` mailer writes mail to the function logs. |
+
+`DB_SSLMODE=require`, `DB_SEARCH_PATH=daleel,extensions,public`, `MEDIA_DISK=supabase` and
+`PRIVATE_MEDIA_DISK=supabase_private` are already the defaults on Vercel.
+
+### Function region
+Set **Project → Settings → Functions → Region** to **Mumbai (`bom1`)**, next to the Supabase project in
+`ap-south-1`. Every page makes several database round trips, so a cross-continent region adds most of the response time.
+
+### Deploying
+Pushes to the production branch deploy to production; other branches get preview deployments. Migrations do not run
+on Vercel. Apply schema changes from a trusted machine with the production variables:
+`php artisan migrate --force`, or through Supabase migrations as in section 1.
+
+Verify a deployment with `GET /up` (framework health check) and `GET /robots.txt`.
+
+## 3. Server requirements
 
 * PHP 8.2+ (8.3 recommended) with `pdo_pgsql`, `mbstring`, `intl`, `gd` (WebP support), `fileinfo`, `openssl`, `curl`, `zip`, optional `exif`, `redis`
 * Composer 2, Node 20+ (build step only), a web server (Nginx recommended), Supervisor (queue worker), cron
@@ -56,7 +101,7 @@ php artisan tinker --execute="echo App\Models\Category::count();"   # 77
 
 Any Laravel-capable host works: a VPS (Ubuntu 24.04), Laravel Forge, Ploi, or Laravel Cloud. Supabase only hosts the database and files.
 
-## 3. First deployment
+## 4. First deployment
 
 ```bash
 git clone https://github.com/rabi3ogabes/daleelqatar.git /var/www/daleelqatar && cd /var/www/daleelqatar
@@ -128,7 +173,7 @@ php artisan queue:restart
 php artisan up
 ```
 
-## 4. Backups & recovery
+## 5. Backups & recovery
 
 * **Supabase:** the free plan has no automatic backups you can restore yourself; Pro includes daily backups and optional point-in-time recovery. Upgrade before launch.
 * **Independent logical backups (recommended on every plan):**
@@ -140,7 +185,7 @@ php artisan up
 * **Files:** Supabase Storage objects are not included in database backups; replicate the `daleel-public` / `daleel-private` buckets with `rclone` (S3 protocol) on a schedule.
 * Test a restore into a staging project at least once per quarter.
 
-## 5. Monitoring & operations
+## 6. Monitoring & operations
 
 * Health check: `GET /up` (returns 200 when the app boots).
 * Logs: daily files in `storage/logs` (`LOG_STACK=daily`); ship them to your log platform or add Sentry/Flare via `LOG_STACK`.
@@ -148,7 +193,7 @@ php artisan up
 * Failed jobs: `php artisan queue:failed`; system health card under *Admin → Settings*.
 * Keep dependencies patched: `composer audit`, `npm audit`, monthly `composer update` on staging first.
 
-## 6. Security checklist
+## 7. Security checklist
 
 - [x] CSRF protection on every web form; Sanctum bearer tokens for the mobile API
 - [x] Authorisation through policies/permissions on every protected action; ownership checks for owners

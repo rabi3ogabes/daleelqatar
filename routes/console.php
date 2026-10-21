@@ -5,7 +5,8 @@ use Illuminate\Support\Facades\Schedule;
 /*
 |--------------------------------------------------------------------------
 | Scheduled tasks — run `php artisan schedule:work` (or a cron calling
-| `php artisan schedule:run` every minute) in production.
+| `php artisan schedule:run` every minute) in production. On Vercel the
+| same housekeeping runs daily through the /cron/maintenance cron job.
 |--------------------------------------------------------------------------
 */
 

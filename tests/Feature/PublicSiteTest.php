@@ -175,6 +175,16 @@ class PublicSiteTest extends TestCase
             ->assertDontSee('demo-biz')->assertDontSee('pending-biz');
     }
 
+    public function test_sitemap_is_well_formed_xml(): void
+    {
+        $this->business(['is_demo' => false, 'slug' => 'well-formed-biz']);
+
+        $xml = $this->get('/sitemap.xml')->assertOk()->getContent();
+
+        $this->assertStringStartsWith('<?xml version="1.0" encoding="UTF-8"?>', $xml);
+        $this->assertNotFalse(simplexml_load_string($xml), 'The sitemap must parse as XML.');
+    }
+
     public function test_robots_blocks_everything_outside_production(): void
     {
         $this->get('/robots.txt')->assertOk()->assertSee('Disallow: /');

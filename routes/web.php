@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CronController;
 use App\Http\Controllers\SeoController;
 use Illuminate\Support\Facades\Route;
 
@@ -11,6 +12,9 @@ use Illuminate\Support\Facades\Route;
 Route::get('/sitemap.xml', [SeoController::class, 'sitemap'])->name('sitemap');
 Route::get('/robots.txt', [SeoController::class, 'robots'])->name('robots');
 Route::get('/manifest.webmanifest', [SeoController::class, 'manifest'])->name('manifest');
+Route::get('/cron/maintenance', [CronController::class, 'maintenance'])
+    ->middleware('throttle:10,1')
+    ->name('cron.maintenance');
 
 /*
 |--------------------------------------------------------------------------

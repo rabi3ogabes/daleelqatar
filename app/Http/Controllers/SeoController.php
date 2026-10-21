@@ -70,7 +70,8 @@ class SeoController extends Controller
             Page::query()->where('is_published', true)->whereIn('slug', ['privacy', 'terms'])->get()
                 ->each(fn ($p) => $add($p->slug, [], $p->updated_at, '0.2'));
 
-            return view('seo.sitemap', ['entries' => $entries])->render();
+            // Prepended here: Blade cannot hold "<?xml" (it is a PHP open tag when short_open_tag is on).
+            return '<?xml version="1.0" encoding="UTF-8"?>'."\n".view('seo.sitemap', ['entries' => $entries])->render();
         });
 
         return response($xml, 200, ['Content-Type' => 'application/xml; charset=UTF-8']);
@@ -88,6 +89,7 @@ class SeoController extends Controller
             'Disallow: /register', 'Disallow: /en/register',
             'Disallow: /search', 'Disallow: /en/search',
             'Disallow: /api/',
+            'Disallow: /cron/',
             'Disallow: /*?*sort=',
             '',
             'Sitemap: '.route('sitemap'),

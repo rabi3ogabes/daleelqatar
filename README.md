@@ -110,8 +110,12 @@ Coverage includes: public pages in both languages and RTL/LTR, language switchin
 
 ## Deployment
 
-Step-by-step production instructions (server requirements, Nginx, queue worker, scheduler, release procedure,
-backups & recovery, monitoring, security checklist): [`docs/deployment.md`](docs/deployment.md).
+**Vercel (serverless):** `vercel.json` + `api/index.php` deploy the app as a single PHP function (PHP 8.4), with
+static assets on the CDN and a daily Vercel Cron Job for housekeeping. Add the database and Supabase variables listed in
+[`docs/deployment.md`](docs/deployment.md#2-vercel-serverless) and deploy.
+
+**Traditional server:** server requirements, Nginx, queue worker, scheduler, release procedure, backups & recovery,
+monitoring, security checklist: [`docs/deployment.md`](docs/deployment.md).
 
 ## Project structure
 
