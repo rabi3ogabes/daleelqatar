@@ -1,0 +1,20 @@
+<?php
+
+return [
+    '401_title' => 'Sign-in required',
+    '401_text' => 'Please sign in to continue.',
+    '403_title' => 'Access denied',
+    '403_text' => 'You do not have permission to view this page.',
+    '404_title' => 'Page not found',
+    '404_text' => 'The page may have moved or no longer exists. Try searching the directory.',
+    '419_title' => 'Session expired',
+    '419_text' => 'Please refresh the page and try again.',
+    '429_title' => 'Too many requests',
+    '429_text' => 'Please wait a moment and try again.',
+    '500_title' => 'Server error',
+    '500_text' => 'Sorry, something went wrong on our side. Our team has been notified.',
+    '503_title' => 'Down for maintenance',
+    '503_text' => 'We are making improvements and will be back shortly.',
+    'go_home' => 'Back to home',
+    'search_directory' => 'Search the directory',
+];

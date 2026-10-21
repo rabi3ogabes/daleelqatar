@@ -1,0 +1,27 @@
+<?php
+
+return [
+    'your_rating' => 'Your rating',
+    'title' => 'Review title',
+    'body' => 'Your experience',
+    'body_placeholder' => 'Describe your experience honestly and clearly…',
+    'submit' => 'Post review',
+    'submitted_pending' => 'Thank you! Your review will appear once it has been moderated.',
+    'submitted' => 'Thank you! Your review has been published.',
+    'disabled' => 'Reviews are currently unavailable.',
+    'not_available' => 'This listing cannot be reviewed.',
+    'own_business' => 'You cannot review your own business.',
+    'already_reviewed' => 'You have already reviewed this business.',
+    'already_reported' => 'You have already reported this review.',
+    'replies_disabled' => 'Replies to reviews are disabled.',
+    'reply_only_approved' => 'Only published reviews can be replied to.',
+    'owner_reply' => 'Response from the owner',
+    'report' => 'Report',
+    'report_review' => 'Report this review',
+    'reported' => 'Thanks — our team will review it.',
+    'login_to_review' => 'Sign in to write a review',
+    'verify_to_review' => 'Verify your email address to write a review.',
+    'guidelines' => 'Reviews must reflect a genuine experience and are moderated before publication.',
+    'stars' => '{1} 1 star|[2,*] :count stars',
+    'your_review_pending' => 'Your review is awaiting moderation.',
+];

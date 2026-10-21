@@ -1,0 +1,8 @@
+# Not needed to build or run the app on Vercel
+/.github
+/tests
+/docs/*.md
+/docs/api/README.md
+/storage
+/README.md
+/phpunit.xml

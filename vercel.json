@@ -1,0 +1,40 @@
+{
+    "$schema": "https://openapi.vercel.sh/vercel.json",
+    "framework": null,
+    "installCommand": "npm ci --no-audit --no-fund",
+    "buildCommand": "npm run build",
+    "outputDirectory": "public",
+    "functions": {
+        "api/index.php": {
+            "runtime": "vercel-php@0.8.0",
+            "maxDuration": 30,
+            "excludeFiles": "{.git/**,.vercel/**,node_modules/**,tests/**,vendor/**/.git/**,vendor/*/*/tests/**,resources/css/**,resources/js/**,vercel.json,.vercelignore,package.json,package-lock.json,vite.config.js}"
+        }
+    },
+    "routes": [
+        {
+            "src": "/(index\\.php|\\.htaccess)?",
+            "dest": "/api/index.php"
+        },
+        {
+            "src": "/build/(.*)",
+            "headers": {
+                "Cache-Control": "public, max-age=31536000, immutable"
+            },
+            "continue": true
+        },
+        {
+            "handle": "filesystem"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "/api/index.php"
+        }
+    ],
+    "crons": [
+        {
+            "path": "/cron/maintenance",
+            "schedule": "0 3 * * *"
+        }
+    ]
+}

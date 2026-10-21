@@ -1,0 +1,333 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+use App\Enums\BusinessStatus;
+use App\Enums\ModerationStatus;
+use App\Enums\OfferStatus;
+use App\Models\Concerns\HasTranslations;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class Business extends Model
+{
+    /** @use HasFactory<\Database\Factories\BusinessFactory> */
+    use HasFactory, HasTranslations, HasUuids, SoftDeletes;
+
+    public const TIMEZONE = 'Asia/Qatar';
+
+    /**
+     * Mass-assignable attributes that owners may edit. Moderation, verification,
+     * featuring and aggregate columns are never mass assignable.
+     */
+    protected $fillable = [
+        'category_id', 'municipality_id', 'area_id',
+        'name_ar', 'name_en', 'tagline_ar', 'tagline_en', 'description_ar', 'description_en', 'keywords',
+        'address_ar', 'address_en', 'latitude', 'longitude',
+        'phone', 'whatsapp', 'email', 'website',
+        'meta_title_ar', 'meta_title_en', 'meta_description_ar', 'meta_description_en',
+    ];
+
+    protected $hidden = ['search_document', 'search_vector', 'moderation_notes'];
+
+    protected function casts(): array
+    {
+        return [
+            'status' => BusinessStatus::class,
+            'submitted_at' => 'datetime',
+            'approved_at' => 'datetime',
+            'published_at' => 'datetime',
+            'featured_until' => 'datetime',
+            'verified_at' => 'datetime',
+            'is_featured' => 'boolean',
+            'is_verified' => 'boolean',
+            'is_demo' => 'boolean',
+            'rating_avg' => 'float',
+            'latitude' => 'float',
+            'longitude' => 'float',
+        ];
+    }
+
+    public function uniqueIds(): array
+    {
+        return ['uuid'];
+    }
+
+    public function getRouteKeyName(): string
+    {
+        return 'slug';
+    }
+
+    // ---------------------------------------------------------------- relations
+
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(Category::class);
+    }
+
+    public function categories(): BelongsToMany
+    {
+        return $this->belongsToMany(Category::class, 'business_category');
+    }
+
+    public function municipality(): BelongsTo
+    {
+        return $this->belongsTo(Municipality::class);
+    }
+
+    public function area(): BelongsTo
+    {
+        return $this->belongsTo(Area::class);
+    }
+
+    public function images(): HasMany
+    {
+        return $this->hasMany(BusinessImage::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function services(): HasMany
+    {
+        return $this->hasMany(BusinessService::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function openingHours(): HasMany
+    {
+        return $this->hasMany(OpeningHour::class)->orderBy('day_of_week')->orderBy('opens_at');
+    }
+
+    public function socialLinks(): HasMany
+    {
+        return $this->hasMany(BusinessSocialLink::class);
+    }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(Review::class);
+    }
+
+    public function approvedReviews(): HasMany
+    {
+        return $this->reviews()->where('status', ModerationStatus::Approved);
+    }
+
+    public function offers(): HasMany
+    {
+        return $this->hasMany(Offer::class);
+    }
+
+    public function statusChanges(): HasMany
+    {
+        return $this->hasMany(BusinessStatusChange::class)->latest('created_at')->latest('id');
+    }
+
+    public function claimRequests(): HasMany
+    {
+        return $this->hasMany(BusinessClaimRequest::class);
+    }
+
+    public function verificationRequests(): HasMany
+    {
+        return $this->hasMany(BusinessVerificationRequest::class);
+    }
+
+    public function reports(): HasMany
+    {
+        return $this->hasMany(ListingReport::class);
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(BusinessEvent::class);
+    }
+
+    public function favoritedBy(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'favorites')->withTimestamps();
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    // ------------------------------------------------------------------- scopes
+
+    /** Listings visible to the public. */
+    public function scopePublished(Builder $q): Builder
+    {
+        return $q->where('businesses.status', BusinessStatus::Approved)->whereNotNull('businesses.published_at');
+    }
+
+    public function scopeFeatured(Builder $q): Builder
+    {
+        return $q->where('businesses.is_featured', true)
+            ->where(fn (Builder $w) => $w->whereNull('businesses.featured_until')->orWhere('businesses.featured_until', '>', now()));
+    }
+
+    public function scopeVerified(Builder $q): Builder
+    {
+        return $q->where('businesses.is_verified', true);
+    }
+
+    public function scopeInCategory(Builder $q, Category $category): Builder
+    {
+        $ids = $category->familyIds();
+
+        return $q->where(fn (Builder $w) => $w->whereIn('businesses.category_id', $ids)
+            ->orWhereExists(fn ($s) => $s->selectRaw('1')->from('business_category')
+                ->whereColumn('business_category.business_id', 'businesses.id')
+                ->whereIn('business_category.category_id', $ids)));
+    }
+
+    /** Businesses open right now in Qatar time, including periods that run past midnight. */
+    public function scopeOpenNow(Builder $q, ?CarbonImmutable $at = null): Builder
+    {
+        $now = ($at ?? CarbonImmutable::now(self::TIMEZONE))->setTimezone(self::TIMEZONE);
+        $day = $now->dayOfWeek;
+        $prev = ($day + 6) % 7;
+        $time = $now->format('H:i:s');
+
+        return $q->whereExists(function ($s) use ($day, $prev, $time) {
+            $s->selectRaw('1')->from('opening_hours as oh')
+                ->whereColumn('oh.business_id', 'businesses.id')
+                ->where('oh.is_closed', false)
+                ->where(function ($w) use ($day, $prev, $time) {
+                    $w->where(fn ($a) => $a->where('oh.day_of_week', $day)
+                        ->whereColumn('oh.opens_at', '<=', 'oh.closes_at')
+                        ->where('oh.opens_at', '<=', $time)->where('oh.closes_at', '>', $time))
+                        ->orWhere(fn ($b) => $b->where('oh.day_of_week', $day)
+                            ->whereColumn('oh.opens_at', '>', 'oh.closes_at')
+                            ->where('oh.opens_at', '<=', $time))
+                        ->orWhere(fn ($c) => $c->where('oh.day_of_week', $prev)
+                            ->whereColumn('oh.opens_at', '>', 'oh.closes_at')
+                            ->where('oh.closes_at', '>', $time));
+                });
+        });
+    }
+
+    // ------------------------------------------------------------------ helpers
+
+    public function isPublished(): bool
+    {
+        return $this->status === BusinessStatus::Approved && $this->published_at !== null && ! $this->trashed();
+    }
+
+    public function isFeaturedNow(): bool
+    {
+        return $this->is_featured && ($this->featured_until === null || $this->featured_until->isFuture());
+    }
+
+    public function isOwnedBy(?User $user): bool
+    {
+        return $user !== null && $this->owner_id !== null && $this->owner_id === $user->id;
+    }
+
+    public function hasOpeningHours(): bool
+    {
+        return $this->relationLoaded('openingHours') ? $this->openingHours->isNotEmpty() : $this->openingHours()->exists();
+    }
+
+    /** null when no reliable hours exist. */
+    public function isOpenNow(?CarbonImmutable $at = null): ?bool
+    {
+        if (! $this->hasOpeningHours()) {
+            return null;
+        }
+
+        $now = ($at ?? CarbonImmutable::now(self::TIMEZONE))->setTimezone(self::TIMEZONE);
+        $time = $now->format('H:i:s');
+        $day = $now->dayOfWeek;
+        $prev = ($day + 6) % 7;
+
+        foreach ($this->openingHours as $h) {
+            if ($h->is_closed || ! $h->opens_at || ! $h->closes_at) {
+                continue;
+            }
+            $o = $h->opens_at;
+            $c = $h->closes_at;
+            if ($h->day_of_week === $day && $o <= $c && $o <= $time && $time < $c) {
+                return true;
+            }
+            if ($h->day_of_week === $day && $o > $c && $o <= $time) {
+                return true;
+            }
+            if ($h->day_of_week === $prev && $o > $c && $time < $c) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function logoUrl(): ?string
+    {
+        return $this->logo_path ? media_url($this->logo_path) : null;
+    }
+
+    public function coverUrl(): ?string
+    {
+        return $this->cover_path ? media_url($this->cover_path) : null;
+    }
+
+    /** Best image for cards: cover → first gallery image → logo. */
+    public function cardImageUrl(): ?string
+    {
+        if ($this->cover_path) {
+            return $this->coverUrl();
+        }
+        if ($this->relationLoaded('images') && $this->images->isNotEmpty()) {
+            return $this->images->first()->url();
+        }
+
+        return null;
+    }
+
+    public function locationLabel(?string $locale = null): ?string
+    {
+        $parts = array_filter([$this->area?->t('name', $locale), $this->municipality?->t('name', $locale)]);
+
+        return $parts ? implode(locale_is_rtl($locale) ? '، ' : ', ', $parts) : null;
+    }
+
+    public function whatsappUrl(): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $this->whatsapp);
+
+        return $digits ? 'https://wa.me/'.$digits : null;
+    }
+
+    public function telUrl(): ?string
+    {
+        $digits = preg_replace('/[^\d+]/', '', (string) $this->phone);
+
+        return $digits ? 'tel:'.$digits : null;
+    }
+
+    public function directionsUrl(): ?string
+    {
+        return $this->latitude !== null && $this->longitude !== null
+            ? 'https://www.google.com/maps/dir/?api=1&destination='.$this->latitude.','.$this->longitude
+            : null;
+    }
+
+    /** Active, approved offers currently running. */
+    public function activeOffers(): HasMany
+    {
+        return $this->offers()->where('status', OfferStatus::Approved)->where('is_active', true)
+            ->where('starts_at', '<=', now())->where('ends_at', '>', now());
+    }
+}
