@@ -1,9 +1,10 @@
 {
     "$schema": "https://www.schemastore.org/package.json",
+    "version": "1.2.0",
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
+        "build": "vite build && node scripts/build-info.mjs",
         "dev": "vite"
     },
     "devDependencies": {

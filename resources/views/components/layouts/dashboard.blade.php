@@ -119,6 +119,18 @@
             @endif
             {{ $slot }}
         </main>
+        @if($area === 'admin')
+            @php $build = \App\Support\BuildInfo::get(); @endphp
+            <footer class="flex flex-col gap-1 border-t border-navy-100 px-4 py-4 text-xs text-muted-strong sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+                <span>© {{ now()->year }} {{ __('brand.name') }}</span>
+                <span class="inline-flex flex-wrap items-center gap-x-3 gap-y-1" dir="ltr">
+                    <span class="inline-flex items-center gap-1.5"><x-icon name="git-commit" class="size-3.5 text-gold-600" />{{ __('dashboard.version') }} <strong class="font-semibold text-navy-900">v{{ $build['version'] }}</strong>@if($build['short'])<code class="rounded bg-navy-50 px-1.5 py-0.5 text-[0.7rem] text-navy-700" title="{{ $build['commit'] }}">{{ $build['short'] }}</code>@endif</span>
+                    @if($build['updated_at'])
+                        <span class="inline-flex items-center gap-1.5"><x-icon name="clock" class="size-3.5 text-gold-600" />{{ __('dashboard.last_update') }} <time datetime="{{ $build['updated_at']->toIso8601String() }}" class="font-medium text-navy-900">{{ $build['updated_at']->format('Y-m-d H:i') }}</time> ({{ __('dashboard.qatar_time') }})</span>
+                    @endif
+                </span>
+            </footer>
+        @endif
     </div>
     @include('partials.ui')
     @stack('scripts')
