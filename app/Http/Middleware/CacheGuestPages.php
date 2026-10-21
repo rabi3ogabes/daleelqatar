@@ -46,6 +46,7 @@ class CacheGuestPages
     /** Identical for every visitor: cached whatever cookies the request carries. */
     private const SHARED = [
         'map.data' => 3600,
+        'business.google' => 3600,
         'sitemap' => 3600,
         'sitemap.part' => 3600,
         'robots' => 3600,

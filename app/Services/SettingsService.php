@@ -93,6 +93,11 @@ class SettingsService
             'integrations.adsense_enabled' => ['group' => 'integrations', 'type' => 'boolean', 'value' => true],
             'integrations.consent_banner' => ['group' => 'integrations', 'type' => 'boolean', 'value' => true],
             'integrations.indexnow' => ['group' => 'integrations', 'type' => 'boolean', 'value' => true],
+            'integrations.google_places' => ['group' => 'integrations', 'type' => 'boolean', 'value' => true],
+            'integrations.google_reviews' => ['group' => 'integrations', 'type' => 'boolean', 'value' => true],
+            'integrations.google_cache_hours' => ['group' => 'integrations', 'type' => 'integer', 'value' => 24],
+            'integrations.ai_assistant' => ['group' => 'integrations', 'type' => 'boolean', 'value' => true],
+            'integrations.enrichment_daily' => ['group' => 'integrations', 'type' => 'integer', 'value' => 0],
         ];
     }
 

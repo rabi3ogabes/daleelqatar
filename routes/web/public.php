@@ -38,6 +38,7 @@ Route::get('/featured', [BusinessController::class, 'featured'])->name('business
 Route::get('/latest', [BusinessController::class, 'latest'])->name('businesses.latest');
 Route::get('/business/{business:slug}', [BusinessController::class, 'show'])->name('business.show');
 Route::get('/business/{business:slug}/reveal/{type}', [BusinessController::class, 'reveal'])->whereIn('type', ['phone', 'whatsapp', 'email'])->middleware('throttle:reveal')->name('business.reveal');
+Route::get('/business/{business:slug}/google.json', [BusinessController::class, 'google'])->middleware('throttle:60,1')->name('business.google');
 Route::post('/business/{business:slug}/viewed', [BusinessController::class, 'viewed'])->middleware('throttle:interactions')->name('business.viewed');
 Route::post('/business/{business:slug}/track', [BusinessController::class, 'track'])->middleware('throttle:interactions')->name('business.track');
 Route::post('/business/{business:slug}/report', [ReportController::class, 'store'])->middleware('throttle:submissions')->name('business.report');

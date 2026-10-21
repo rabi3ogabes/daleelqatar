@@ -37,6 +37,7 @@ final class AdminNavigation
                 $can('businesses.verify') ? ['label' => __('admin.nav.verifications'), 'route' => 'admin.verifications.index', 'icon' => 'badge-check', 'pattern' => 'admin.verifications.*', 'badge' => $b['verifications']] : null,
                 $can('imports.manage') ? ['label' => __('imports.nav.imports'), 'route' => 'admin.imports.index', 'icon' => 'file-spreadsheet', 'pattern' => 'admin.imports.*'] : null,
                 $can('imports.manage') ? ['label' => __('imports.nav.discovery'), 'route' => 'admin.discovery.index', 'icon' => 'radar', 'pattern' => 'admin.discovery.*'] : null,
+                $can('imports.manage') ? ['label' => __('enrichment.nav'), 'route' => 'admin.enrichment.index', 'icon' => 'sparkles', 'pattern' => 'admin.enrichment.*', 'badge' => $b['enrichment']] : null,
                 $can('categories.manage') ? ['label' => __('admin.nav.categories'), 'route' => 'admin.categories.index', 'icon' => 'folder-tree', 'pattern' => 'admin.categories.*'] : null,
                 $can('locations.manage') ? ['label' => __('admin.nav.locations'), 'route' => 'admin.municipalities.index', 'icon' => 'map-pin', 'pattern' => ['admin.municipalities.*', 'admin.areas.*']] : null,
                 $can('offers.moderate') ? ['label' => __('admin.nav.offers'), 'route' => 'admin.offers.index', 'icon' => 'tag', 'pattern' => 'admin.offers.*', 'badge' => $b['offers']] : null,
@@ -75,6 +76,7 @@ final class AdminNavigation
             'offers' => DB::table('offers')->whereNull('deleted_at')->where('status', OfferStatus::Pending->value)->count(),
             'reports' => DB::table('listing_reports')->where('status', 'open')->count() + DB::table('review_reports')->where('status', 'open')->count(),
             'messages' => DB::table('contact_messages')->where('status', 'new')->count(),
+            'enrichment' => DB::table('business_suggestions')->where('status', 'pending')->count(),
         ]);
     }
 

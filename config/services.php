@@ -35,6 +35,19 @@ return [
         ],
     ],
 
+    // Google Places API (New): matching listings to Google Maps and showing Google reviews.
+    // Use a server key restricted to the Places API (New).
+    'google_places' => [
+        'key' => env('GOOGLE_MAPS_API_KEY'),
+    ],
+
+    // Claude writes Arabic name, description and services suggestions for admin review.
+    'anthropic' => [
+        'key' => env('ANTHROPIC_API_KEY'),
+        'model' => env('ANTHROPIC_MODEL', 'claude-opus-5-5'),
+        'base_url' => env('ANTHROPIC_BASE_URL'),
+    ],
+
     // Google Analytics / AdSense / verification tags (IDs are managed in Admin → Settings).
     'integrations' => [
         'enabled' => env('INTEGRATIONS_ENABLED', env('APP_ENV', 'production') === 'production'),

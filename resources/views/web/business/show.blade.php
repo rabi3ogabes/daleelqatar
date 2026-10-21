@@ -285,6 +285,64 @@
                         </div>
                     </section>
                 @endif
+                {{-- Google rating & reviews (live from Google, with attribution; loaded on scroll) --}}
+                @if($business->google_place_id && \App\Support\Enrichment\GooglePlaces::reviewsEnabled())
+                    <section class="card card-pad" aria-labelledby="google-h" x-data="googleReviews(@js(route('business.google', $business)))" x-cloak>
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <h2 id="google-h" class="flex items-center gap-2 text-lg font-semibold">
+                                    <svg viewBox="0 0 24 24" class="size-5" aria-hidden="true"><path fill="#4285F4" d="M22.5 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h5.9a5.05 5.05 0 0 1-2.19 3.31v2.75h3.54c2.07-1.91 3.25-4.72 3.25-8.09Z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.54-2.75c-.98.66-2.24 1.05-3.74 1.05-2.87 0-5.3-1.94-6.17-4.55H2.18v2.84A11 11 0 0 0 12 23Z"/><path fill="#FBBC05" d="M5.83 14.09A6.6 6.6 0 0 1 5.48 12c0-.73.13-1.43.35-2.09V7.07H2.18A11 11 0 0 0 1 12c0 1.78.43 3.45 1.18 4.93l3.65-2.84Z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15A10.56 10.56 0 0 0 12 1 11 11 0 0 0 2.18 7.07l3.65 2.84C6.7 7.31 9.13 5.38 12 5.38Z"/></svg>
+                                    {{ __('directory.google.title') }}
+                                </h2>
+                                <div class="divider-gold mt-2"></div>
+                            </div>
+                            <template x-if="data && data.rating">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-3xl font-bold tabular-nums text-navy-900" x-text="data.rating.toFixed(1)"></span>
+                                    <span>
+                                        <span class="flex" aria-hidden="true"><template x-for="n in 5" :key="n"><x-icon name="star" class="size-4" x-bind:class="n <= Math.round(data.rating) ? 'fill-gold-500 text-gold-500' : 'text-navy-200'" /></template></span>
+                                        <span class="text-xs text-muted-strong" x-text="countLabel(data.count)"></span>
+                                    </span>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div x-show="loading" class="mt-5 space-y-3" aria-hidden="true">
+                            <div class="h-4 w-1/3 animate-pulse rounded bg-navy-100"></div><div class="h-16 animate-pulse rounded-xl bg-navy-50"></div><div class="h-16 animate-pulse rounded-xl bg-navy-50"></div>
+                        </div>
+                        <p x-show="failed" class="mt-5 text-sm text-muted-strong">{{ __('directory.google.unavailable') }}</p>
+
+                        <template x-if="data">
+                            <div>
+                                <ul class="mt-5 space-y-4" x-show="data.reviews.length">
+                                    <template x-for="(r, i) in data.reviews" :key="i">
+                                        <li class="rounded-xl border border-navy-100 p-4" x-data="{ more: false }">
+                                            <div class="flex items-center gap-3">
+                                                <img x-show="r.photo" :src="r.photo" alt="" class="size-9 rounded-full object-cover" loading="lazy" referrerpolicy="no-referrer">
+                                                <span x-show="!r.photo" class="flex size-9 items-center justify-center rounded-full bg-navy-100 text-sm font-bold text-navy-700" x-text="(r.author || '?').charAt(0)"></span>
+                                                <span class="min-w-0 flex-1">
+                                                    <a x-show="r.author_url" :href="r.author_url" target="_blank" rel="noopener noreferrer nofollow" class="block truncate text-sm font-semibold text-navy-900 hover:text-gold-700" x-text="r.author"></a>
+                                                    <span x-show="!r.author_url" class="block truncate text-sm font-semibold text-navy-900" x-text="r.author"></span>
+                                                    <span class="text-xs text-muted" x-text="r.when"></span>
+                                                </span>
+                                                <span class="flex shrink-0" :aria-label="r.rating + '/5'"><template x-for="n in 5" :key="n"><x-icon name="star" class="size-3.5" x-bind:class="n <= r.rating ? 'fill-gold-500 text-gold-500' : 'text-navy-200'" /></template></span>
+                                            </div>
+                                            <p x-show="r.text" class="mt-3 text-sm leading-relaxed text-charcoal" dir="auto" :class="more ? '' : 'line-clamp-4'" x-text="r.text"></p>
+                                            <button type="button" x-show="r.text && r.text.length > 280" @click="more = !more" class="mt-1 text-xs font-semibold text-gold-700 hover:underline" x-text="more ? @js(__('directory.google.less')) : @js(__('directory.google.more'))"></button>
+                                            <p x-show="r.translated" class="mt-2 text-[0.7rem] text-muted">{{ __('directory.google.translated') }}</p>
+                                        </li>
+                                    </template>
+                                </ul>
+                                <p x-show="!data.reviews.length" class="mt-5 text-sm text-muted-strong">{{ __('directory.google.no_reviews') }}</p>
+                                <div class="mt-5 flex flex-wrap items-center gap-2">
+                                    <a :href="data.reviews_url" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm"><x-icon name="external-link" class="size-4" />{{ __('directory.google.all') }}</a>
+                                    <a x-show="data.write_url" :href="data.write_url" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm"><x-icon name="pencil" class="size-4" />{{ __('directory.google.write') }}</a>
+                                    <span class="ms-auto text-[0.7rem] text-muted">{{ __('directory.google.attribution') }}</span>
+                                </div>
+                            </div>
+                        </template>
+                    </section>
+                @endif
             </div>
 
             {{-- Sidebar --}}
@@ -388,6 +446,9 @@
                         <iframe title="{{ __('business.map_title', ['name' => $name]) }}" loading="lazy" class="h-56 w-full border-0" referrerpolicy="no-referrer"
                             src="https://www.openstreetmap.org/export/embed.html?bbox={{ $bbox }}&amp;layer=mapnik&amp;marker={{ $business->latitude }},{{ $business->longitude }}"></iframe>
                         <div class="p-4"><a href="{{ $business->directionsUrl() }}" target="_blank" rel="noopener noreferrer" @click="dqTrack(@js($trackUrl), 'directions')" class="btn btn-outline w-full"><x-icon name="navigation" class="size-4" />{{ __('business.open_in_maps') }}</a></div>
+                    @endif
+                    @if($business->google_maps_url)
+                        <div @class(['px-4 pb-4', 'pt-0' => $business->latitude !== null, 'pt-1' => $business->latitude === null])><a href="{{ $business->google_maps_url }}" target="_blank" rel="noopener noreferrer" @click="dqTrack(@js($trackUrl), 'directions')" class="btn btn-ghost w-full"><x-icon name="map-pin" class="size-4" />{{ __('directory.google.view_on_maps') }}</a></div>
                     @endif
                 </section>
 

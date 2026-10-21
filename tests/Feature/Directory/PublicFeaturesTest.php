@@ -139,10 +139,12 @@ class PublicFeaturesTest extends TestCase
             'integrations__google_verification' => '<meta name="google-site-verification" content="Tok3n_abcdefghij" />',
             'integrations__ga4_id' => 'G-ABCDE12345',
             'integrations__adsense_client' => '',
+            'integrations__google_cache_hours' => 24,
+            'integrations__enrichment_daily' => 0,
         ]])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame('Tok3n_abcdefghij', setting('integrations.google_verification'));
 
-        $this->actingAs($admin)->put(route('admin.settings.update', 'integrations'), ['s' => ['integrations__ga4_id' => 'UA-1234']])
+        $this->actingAs($admin)->put(route('admin.settings.update', 'integrations'), ['s' => ['integrations__ga4_id' => 'UA-1234', 'integrations__google_cache_hours' => 24, 'integrations__enrichment_daily' => 0]])
             ->assertSessionHasErrors('s.integrations__ga4_id');
     }
 

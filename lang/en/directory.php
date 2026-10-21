@@ -80,4 +80,16 @@ return [
         'decline' => 'Decline',
     ],
     'ad_label' => 'Advertisement',
+    'google' => [
+        'title' => 'Google reviews',
+        'unavailable' => 'Google reviews are not available right now.',
+        'more' => 'Read more',
+        'less' => 'Show less',
+        'translated' => 'Translated by Google',
+        'no_reviews' => 'No reviews on Google yet.',
+        'all' => 'All reviews on Google',
+        'write' => 'Write a review',
+        'attribution' => 'Reviews from Google',
+        'view_on_maps' => 'View on Google Maps',
+    ],
 ];
