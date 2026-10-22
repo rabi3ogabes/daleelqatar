@@ -94,7 +94,11 @@ final class WebsiteReader
             }
             try {
                 $page = $this->fetcher->get($link, $home->url);
-            } catch (DiscoveryException) {
+            } catch (DiscoveryException $e) {
+                if ($e->getMessage() === 'out_of_time') {
+                    break; // keep what was read so far
+                }
+
                 continue;
             }
             if (! $page->isHtml()) {
@@ -121,7 +125,11 @@ final class WebsiteReader
                 if ($result->isHtml()) {
                     return $result;
                 }
-            } catch (DiscoveryException) {
+            } catch (DiscoveryException $e) {
+                if ($e->getMessage() === 'out_of_time') {
+                    throw $e; // not "unreachable": the request simply ran out of time
+                }
+
                 continue;
             }
         }

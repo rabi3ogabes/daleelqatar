@@ -9,6 +9,7 @@ use App\Models\Business;
 use App\Models\Category;
 use App\Models\CategoryReview;
 use App\Support\Categories\CategoryReviewer;
+use App\Support\Deadline;
 use App\Support\Enrichment\AiWriter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -66,6 +67,7 @@ class CategoryReviewController extends Controller
             'cursor' => ['nullable', 'integer', 'min:0'],
             'ai' => ['boolean'],
         ]);
+        Deadline::start(48.0);
         $step = $this->reviewer->scan($data['scope'], (int) ($data['cursor'] ?? 0), $request->boolean('ai'));
 
         return response()->json($step + ['remaining' => $step['done'] ? 0 : $this->reviewer->scope($data['scope'])->where('id', '>', $step['cursor'])->count()]);
@@ -141,6 +143,7 @@ class CategoryReviewController extends Controller
     /** "Check category" on a listing's admin page. */
     public function check(Request $request, int $business): RedirectResponse
     {
+        Deadline::start(48.0);
         $model = Business::query()->findOrFail($business);
         $review = $this->reviewer->check($model);
 

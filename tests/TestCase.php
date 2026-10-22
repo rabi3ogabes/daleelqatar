@@ -3,6 +3,7 @@
 namespace Tests;
 
 use App\Models\User;
+use App\Support\Deadline;
 use App\Support\Permissions;
 use Database\Seeders\CategorySeeder;
 use Database\Seeders\ContentSeeder;
@@ -19,6 +20,7 @@ abstract class TestCase extends BaseTestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Deadline::clear();
         $this->seed([RolesAndPermissionsSeeder::class, LocationSeeder::class, CategorySeeder::class, ContentSeeder::class]);
         $this->withoutVite();
     }

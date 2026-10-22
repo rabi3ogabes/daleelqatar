@@ -6,6 +6,8 @@ namespace App\Support\Enrichment;
 
 use App\Models\Business;
 use App\Models\BusinessSuggestion;
+use App\Support\Deadline;
+use App\Support\Discovery\DiscoveryException;
 use App\Support\Import\Normalizer;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -59,7 +61,9 @@ final class Enricher
         }
 
         // 2. Company website (listing → business e-mail domain → Google)
-        if ($options['website']) {
+        if ($options['website'] && ! Deadline::has(15)) {
+            $notes['website'] = 'out_of_time';
+        } elseif ($options['website']) {
             $candidates = $this->reader->candidates($business, $place['websiteUri'] ?? null);
             if ($candidates === []) {
                 $websiteStatus = 'none';
@@ -70,6 +74,14 @@ final class Enricher
                 foreach (array_slice($candidates, 0, 2) as $candidate) {
                     try {
                         $site = $this->reader->read($candidate['url']);
+                    } catch (DiscoveryException $e) {
+                        if ($e->getMessage() === 'out_of_time') {
+                            // Ran out of time: the website status stays as it was, the next run tries again.
+                            $websiteStatus = $business->website_status;
+                            $notes['website'] = 'out_of_time';
+                            break;
+                        }
+                        $site = null;
                     } catch (Throwable $e) {
                         report($e);
                         $site = null;
@@ -325,7 +337,9 @@ final class Enricher
                 'notes' => $notes ?: null,
             ]);
 
-            $business->forceFill(['enriched_at' => now(), 'website_status' => $websiteStatus])->saveQuietly();
+            // A check cut short by the request's time limit stays "not enriched", so the next run finishes it.
+            $cutShort = array_intersect(array_values($notes), ['out_of_time', 'ai_out_of_time', 'google_out_of_time']) !== [];
+            $business->forceFill(['enriched_at' => $cutShort ? $business->enriched_at : now(), 'website_status' => $websiteStatus])->saveQuietly();
 
             return $suggestion;
         });

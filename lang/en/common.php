@@ -52,6 +52,8 @@ return [
     'sample_listing_hint' => 'Development sample data only',
     'confirm_title' => 'Are you sure?',
     'confirm_action' => 'Yes, continue',
+    'error_timeout' => 'The server took too long to answer. Please try again — work already done is kept.',
+    'error_generic' => 'Something went wrong. Please try again.',
     'saved' => 'Saved successfully.',
     'deleted' => 'Deleted successfully.',
     'updated' => 'Updated successfully.',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\Enrichment;
 
+use App\Support\Deadline;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
@@ -77,10 +78,13 @@ final class GooglePlaces
     private function call(string $method, string $path, array $fields, array $payload): array
     {
         $key = self::key() ?? throw new EnrichmentException('google_not_configured');
+        if (! Deadline::has(4)) {
+            throw new EnrichmentException('google_out_of_time');
+        }
 
         try {
             $request = Http::withHeaders(['X-Goog-Api-Key' => $key, 'X-Goog-FieldMask' => implode(',', $fields)])
-                ->acceptJson()->timeout(15)->connectTimeout(5)->retry(2, 400, throw: false);
+                ->acceptJson()->timeout((int) ceil(Deadline::timeout(15)))->connectTimeout(5)->retry(Deadline::has(35) ? 2 : 1, 400, throw: false);
             $response = $method === 'post' ? $request->post(self::BASE.$path, $payload) : $request->get(self::BASE.$path, $payload);
         } catch (ConnectionException) {
             throw new EnrichmentException('google_unreachable');

@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ScrapeSource;
 use App\Support\Categories\CategoryReviewer;
+use App\Support\Deadline;
 use App\Support\Discovery\DiscoveryRunner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,6 +36,7 @@ class CronController extends Controller
     public function maintenance(Request $request): JsonResponse
     {
         $this->authorizeCron($request);
+        Deadline::start(55.0);
 
         // Sanctum only registers its command for console runs; this is an HTTP request.
         if (! array_key_exists('sanctum:prune-expired', Artisan::all())) {

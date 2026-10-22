@@ -34,7 +34,8 @@ final class CategoryReviewer
     /** Below this the AI is asked for a second opinion. */
     public const ASK_AI_BELOW = 75;
 
-    public const AI_BATCH = 20;
+    /** Small batches keep each AI answer well inside the request's time limit. */
+    public const AI_BATCH = 12;
 
     public function __construct(
         private readonly CategoryClassifier $classifier,

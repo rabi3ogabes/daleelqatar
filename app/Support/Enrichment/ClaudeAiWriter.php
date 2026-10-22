@@ -7,6 +7,7 @@ namespace App\Support\Enrichment;
 use Anthropic\Client;
 use Anthropic\Core\Exceptions\AnthropicException;
 use Anthropic\Messages\Message;
+use App\Support\Deadline;
 use App\Support\Import\Normalizer;
 
 /**
@@ -213,6 +214,9 @@ final class ClaudeAiWriter implements AiWriter
 
     private function json(string $system, string $user, array $schema, string $effort, int $maxTokens): array
     {
+        if (! Deadline::has(12)) {
+            throw new EnrichmentException('ai_out_of_time');
+        }
         try {
             $message = $this->client()->messages->create(
                 model: (string) config('services.anthropic.model', 'claude-opus-5-5'),
@@ -220,7 +224,7 @@ final class ClaudeAiWriter implements AiWriter
                 system: $system,
                 messages: [['role' => 'user', 'content' => $user]],
                 outputConfig: ['effort' => $effort, 'format' => ['type' => 'json_schema', 'schema' => $schema]],
-                requestOptions: ['timeout' => 120, 'maxRetries' => 2],
+                requestOptions: ['timeout' => Deadline::timeout(120, margin: 3), 'maxRetries' => Deadline::active() ? 0 : 2],
             );
         } catch (AnthropicException $e) {
             throw new EnrichmentException('ai_error:'.class_basename($e), 0, $e);

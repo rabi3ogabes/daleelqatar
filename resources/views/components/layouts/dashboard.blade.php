@@ -10,7 +10,7 @@
     $roleLabel = $user?->getRoleNames()->map(fn ($r) => __('dashboard.roles.'.$r))->first() ?? '';
 @endphp
 <!DOCTYPE html>
-<html lang="{{ app()->getLocale() }}" dir="{{ locale_is_rtl() ? 'rtl' : 'ltr' }}" data-confirm-title="{{ __('common.confirm_title') }}" data-confirm-label="{{ __('common.confirm_action') }}">
+<html lang="{{ app()->getLocale() }}" dir="{{ locale_is_rtl() ? 'rtl' : 'ltr' }}" data-confirm-title="{{ __('common.confirm_title') }}" data-confirm-label="{{ __('common.confirm_action') }}" data-error-timeout="{{ __('common.error_timeout') }}" data-error-generic="{{ __('common.error_generic') }}">
 <head>
     @include('partials.head')
 </head>

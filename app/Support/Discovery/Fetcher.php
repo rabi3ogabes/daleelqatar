@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\Discovery;
 
+use App\Support\Deadline;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -105,6 +106,9 @@ final class Fetcher
 
     private function request(string $url, string $ip, string $site, bool $plain = false): FetchResult
     {
+        if (! Deadline::has(3 + $this->waitFor($url) / 1000)) {
+            throw new DiscoveryException('out_of_time');
+        }
         if (($wait = $this->waitFor($url)) > 0) {
             usleep($wait * 1000);
         }
@@ -120,8 +124,8 @@ final class Fetcher
                 'Accept' => $plain ? 'text/plain,*/*;q=0.5' : 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.5',
                 'Accept-Language' => 'en,ar;q=0.8',
             ])
-                ->timeout($this->timeout)
-                ->connectTimeout(6)
+                ->timeout((int) ceil(Deadline::timeout($this->timeout)))
+                ->connectTimeout((int) ceil(Deadline::timeout(6)))
                 ->withOptions([
                     // Pin the connection to the address that passed the private-network check (no DNS rebinding).
                     'curl' => [CURLOPT_RESOLVE => [$host.':'.$port.':'.(str_contains($ip, ':') ? '['.$ip.']' : $ip)]],
