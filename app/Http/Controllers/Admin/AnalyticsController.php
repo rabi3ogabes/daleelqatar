@@ -7,7 +7,10 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\BusinessEventType;
 use App\Enums\BusinessStatus;
 use App\Http\Controllers\Controller;
+use App\Support\Analytics\SiteAnalytics;
+use App\Support\Analytics\Visit;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -17,7 +20,56 @@ class AnalyticsController extends Controller
 {
     public const RANGES = [7, 30, 90];
 
+    public function __construct(private readonly SiteAnalytics $site) {}
+
+    /** Visitors (who, where from, which pages, on what device) — the default view. */
     public function index(Request $request): View
+    {
+        if ($request->query('tab') === 'directory') {
+            return $this->directory($request);
+        }
+        $range = in_array((string) $request->query('range'), SiteAnalytics::RANGES, true) ? (string) $request->query('range') : '7';
+
+        return view('admin.analytics.visitors', [
+            'range' => $range,
+            'report' => $this->site->overview($range),
+            'realtime' => $this->realtimePayload(),
+        ]);
+    }
+
+    public function realtime(): JsonResponse
+    {
+        return response()->json($this->realtimePayload())->header('Cache-Control', 'no-store');
+    }
+
+    /** @return array<string, mixed> */
+    private function realtimePayload(): array
+    {
+        $now = $this->site->realtime();
+        $total = max(1, $now['active']);
+
+        return [
+            'active' => $now['active'],
+            'views' => $now['views'],
+            'minutes' => $now['minutes'],
+            'pages' => $now['pages']->map(fn ($p) => ['title' => self::pageTitle($p->title, $p->path), 'path' => $p->path, 'visitors' => (int) $p->visitors])->all(),
+            'countries' => $now['countries']->map(fn ($c) => ['flag' => Visit::flag($c->country), 'name' => Visit::countryName($c->country), 'visitors' => (int) $c->visitors])->all(),
+            'devices' => collect(['mobile', 'desktop', 'tablet'])->map(fn ($d) => ['key' => $d, 'label' => __('analytics.devices.'.$d), 'visitors' => (int) ($now['devices'][$d] ?? 0), 'pct' => (int) round(100 * ($now['devices'][$d] ?? 0) / $total)])->all(),
+            'sources' => $now['sources']->map(fn ($s) => ['label' => __('analytics.channels.'.$s->channel), 'visitors' => (int) $s->visitors])->all(),
+            'at' => now()->format('H:i:s'),
+        ];
+    }
+
+    /** The page's own title without the site name ("Pearl Coffee | Daleel Qatar" → "Pearl Coffee"). */
+    public static function pageTitle(?string $title, ?string $path): string
+    {
+        $title = trim((string) preg_replace('/\s*[|–—-]\s*(دليل قطر|Daleel Qatar)\s*$/u', '', (string) $title));
+
+        return $title !== '' ? $title : (string) $path;
+    }
+
+    /** Directory activity: registrations, listings, searches and contact interactions. */
+    private function directory(Request $request): View
     {
         $days = in_array($request->integer('days'), self::RANGES, true) ? $request->integer('days') : 30;
         $start = CarbonImmutable::now()->startOfDay()->subDays($days - 1);
@@ -74,6 +126,7 @@ class AnalyticsController extends Controller
             ->orderByDesc('views_count')->limit(5)->get(['id', 'title_ar', 'title_en', 'views_count']);
 
         return view('admin.analytics.index', [
+            'tab' => 'directory',
             'days' => $days,
             'labels' => $labels,
             'summary' => $summary,

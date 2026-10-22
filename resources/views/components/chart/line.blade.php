@@ -31,12 +31,11 @@
                     <text x="{{ $x($i) }}" y="{{ $H - 8 }}" text-anchor="middle" font-size="11" fill="#5F6672">{{ $label }}</text>
                 @endif
             @endforeach
-            <template x-if="i !== null">
-                <g>
-                    <line :x1="pts[i].x * {{ $W }} / 100" :x2="pts[i].x * {{ $W }} / 100" y1="{{ $padT }}" y2="{{ $padT + $plotH }}" stroke="#AEB8CC" stroke-width="1"/>
-                    <circle :cx="pts[i].x * {{ $W }} / 100" :cy="pts[i].y * {{ $H }} / 100" r="5" fill="{{ $color }}" stroke="#fff" stroke-width="2"/>
-                </g>
-            </template>
+            {{-- No <template> inside SVG: browsers render its children as SVG. A hidden group follows the pointer instead. --}}
+            <g x-show="i !== null" style="display: none">
+                <line :x1="i === null ? 0 : pts[i].x * {{ $W }} / 100" :x2="i === null ? 0 : pts[i].x * {{ $W }} / 100" y1="{{ $padT }}" y2="{{ $padT + $plotH }}" stroke="#AEB8CC" stroke-width="1"/>
+                <circle :cx="i === null ? 0 : pts[i].x * {{ $W }} / 100" :cy="i === null ? 0 : pts[i].y * {{ $H }} / 100" cx="0" cy="0" r="5" fill="{{ $color }}" stroke="#fff" stroke-width="2"/>
+            </g>
             @foreach($values as $i => $v)
                 <rect x="{{ $x($i) - $plotW / max(1, $n - 1) / 2 }}" y="{{ $padT }}" width="{{ $plotW / max(1, $n - 1) }}" height="{{ $plotH }}" fill="transparent" @mouseenter="i = {{ $i }}" @focus="i = {{ $i }}" tabindex="-1"/>
             @endforeach

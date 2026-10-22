@@ -160,11 +160,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified', 'can:adm
     });
 
     Route::middleware('can:settings.manage')->group(function () {
+        Route::get('/adsense', [Admin\AdsenseController::class, 'index'])->middleware('throttle:30,1')->name('adsense.index');
         Route::get('/settings/{group?}', [Admin\SettingsController::class, 'edit'])->name('settings.edit');
         Route::put('/settings/{group}', [Admin\SettingsController::class, 'update'])->name('settings.update');
     });
 
     Route::get('/analytics', [Admin\AnalyticsController::class, 'index'])->middleware('can:analytics.view')->name('analytics.index');
+    Route::get('/analytics/realtime', [Admin\AnalyticsController::class, 'realtime'])->middleware(['can:analytics.view', 'throttle:120,1'])->name('analytics.realtime');
 
     Route::middleware('can:audit.view')->group(function () {
         Route::get('/audit-logs', [Admin\AuditLogController::class, 'index'])->name('audit.index');

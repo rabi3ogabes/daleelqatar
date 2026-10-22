@@ -29,6 +29,12 @@ return [
     'latest' => 'Recently added',
     'privacy' => 'Privacy policy',
     'terms' => 'Terms & conditions',
+    'advertise' => 'Advertise with us',
+    'editorial' => 'Editorial & listing policy',
+    'legal' => 'Legal',
+    'cookies' => 'Cookie policy',
+    'disclaimer' => 'Disclaimer',
+    'cookie_settings' => 'Cookie settings',
     'breadcrumb' => 'Breadcrumb',
     'main' => 'Main navigation',
 ];

@@ -26,6 +26,26 @@ class PageController extends Controller
         return $this->page('terms');
     }
 
+    public function cookies(): View
+    {
+        return $this->page('cookies');
+    }
+
+    public function disclaimer(): View
+    {
+        return $this->page('disclaimer');
+    }
+
+    public function editorial(): View
+    {
+        return $this->page('editorial');
+    }
+
+    public function advertise(): View
+    {
+        return $this->page('advertise');
+    }
+
     public function faq(): View
     {
         $faqs = Faq::query()->active()->get()->groupBy('audience');

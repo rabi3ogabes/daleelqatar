@@ -1,12 +1,14 @@
-<x-layouts.dashboard area="admin" :title="__('admin.analytics.title')" :subtitle="__('admin.analytics.subtitle')" :nav="\App\Support\AdminNavigation::for(auth()->user())"
-    :breadcrumbs="[['label' => __('admin.nav.dashboard'), 'url' => route('admin.dashboard')], ['label' => __('admin.analytics.title')]]">
+<x-layouts.dashboard area="admin" :title="__('analytics.title')" :subtitle="__('admin.analytics.subtitle')" :nav="\App\Support\AdminNavigation::for(auth()->user())"
+    :breadcrumbs="[['label' => __('admin.nav.dashboard'), 'url' => route('admin.dashboard')], ['label' => __('analytics.title')]]">
     <x-slot:actions>
         <div class="flex rounded-xl bg-white p-1 shadow-soft ring-1 ring-navy-100" role="group" aria-label="{{ __('admin.analytics.range') }}">
             @foreach(\App\Http\Controllers\Admin\AnalyticsController::RANGES as $d)
-                <a href="{{ route('admin.analytics.index', ['days' => $d]) }}" @class(['rounded-lg px-3 py-1.5 text-sm font-medium', 'bg-navy-900 text-white' => $days === $d, 'text-navy-700 hover:bg-navy-50' => $days !== $d]) @if($days === $d) aria-current="true" @endif>{{ __('admin.analytics.days', ['count' => $d]) }}</a>
+                <a href="{{ route('admin.analytics.index', ['tab' => 'directory', 'days' => $d]) }}" @class(['rounded-lg px-3 py-1.5 text-sm font-medium', 'bg-navy-900 text-white' => $days === $d, 'text-navy-700 hover:bg-navy-50' => $days !== $d]) @if($days === $d) aria-current="true" @endif>{{ __('admin.analytics.days', ['count' => $d]) }}</a>
             @endforeach
         </div>
     </x-slot:actions>
+
+    @include('admin.analytics.partials.tabs', ['tab' => 'directory'])
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         @foreach(['registrations' => 'user-plus', 'submissions' => 'inbox', 'approvals' => 'badge-check', 'views' => 'eye', 'searches' => 'search', 'offer_views' => 'tag'] as $key => $icon)

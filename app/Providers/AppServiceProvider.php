@@ -166,6 +166,7 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('uploads', fn (Request $r) => Limit::perHour(120)->by($key($r)));
         RateLimiter::for('search', fn (Request $r) => Limit::perMinute(90)->by($r->ip()));
         RateLimiter::for('interactions', fn (Request $r) => Limit::perMinute(30)->by($r->ip()));
+        RateLimiter::for('pageviews', fn (Request $r) => Limit::perMinute(90)->by($r->ip()));
         // Revealing hidden phone numbers / e-mails: generous for people, useless for harvesting.
         RateLimiter::for('reveal', fn (Request $r) => [Limit::perMinute(20)->by($r->ip()), Limit::perDay(300)->by($r->ip())]);
         RateLimiter::for('api', fn (Request $r) => Limit::perMinute(120)->by($key($r)));

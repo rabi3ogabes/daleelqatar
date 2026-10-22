@@ -16,6 +16,7 @@ use App\Support\BusinessSummary;
 use App\Support\Directory;
 use App\Support\Enrichment\GooglePlaces;
 use App\Support\Enrichment\GoogleReviews;
+use App\Support\ListingQuality;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -55,7 +56,7 @@ class BusinessController extends Controller
             ->description($business->t('meta_description') ?: ($business->t('tagline') ?: ($business->t('description') ?: BusinessSummary::for($business))))
             ->image($business->coverUrl() ?? $business->logoUrl())
             ->type('business.business')
-            ->noindex(! $business->isPublished() || $business->is_demo)
+            ->noindex(! $business->isPublished() || $business->is_demo || (ListingQuality::enabled() && ! ListingQuality::isRich($business)))
             ->jsonLd($this->schema($business));
 
         return view('web.business.show', [

@@ -2,7 +2,14 @@
 
 use App\Http\Controllers\CronController;
 use App\Http\Controllers\SeoController;
+use App\Http\Controllers\VisitController;
+use App\Http\Middleware\EnsureAccountIsActive;
+use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /*
 |--------------------------------------------------------------------------
@@ -16,6 +23,12 @@ Route::get('/indexnow.txt', [SeoController::class, 'indexNowKey'])->name('indexn
 Route::get('/csrf-token', [SeoController::class, 'csrfToken'])->middleware('throttle:60,1')->name('csrf.token');
 Route::get('/robots.txt', [SeoController::class, 'robots'])->name('robots');
 Route::get('/manifest.webmanifest', [SeoController::class, 'manifest'])->name('manifest');
+// Visitor analytics: sent from every public page (also CDN-cached ones), so no session, cookie or CSRF token.
+Route::withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, ValidateCsrfToken::class, AddQueuedCookiesToResponse::class, EncryptCookies::class, EnsureAccountIsActive::class])
+    ->middleware('throttle:pageviews')->group(function () {
+        Route::post('/t/view', [VisitController::class, 'view'])->name('visits.view');
+        Route::post('/t/ping', [VisitController::class, 'ping'])->name('visits.ping');
+    });
 Route::get('/cron/maintenance', [CronController::class, 'maintenance'])
     ->middleware('throttle:10,1')
     ->name('cron.maintenance');

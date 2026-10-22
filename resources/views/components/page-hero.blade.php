@@ -13,6 +13,7 @@
                 <h1 class="text-2xl font-bold !text-white sm:text-4xl">{{ $title }}</h1>
                 @if($subtitle)<p class="mt-2 max-w-2xl text-sm text-white/70 sm:text-base">{{ $subtitle }}</p>@endif
                 {{ $slot }}
+                <x-page-views dark class="mt-3 text-xs" />
             </div>
         </div>
     </div>

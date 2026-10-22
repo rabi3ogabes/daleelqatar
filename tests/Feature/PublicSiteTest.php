@@ -165,7 +165,7 @@ class PublicSiteTest extends TestCase
 
     public function test_sitemap_excludes_unpublished_and_demo_listings_and_includes_alternates(): void
     {
-        $live = $this->business(['is_demo' => false, 'slug' => 'real-live-biz']);
+        $live = $this->business(['is_demo' => false, 'slug' => 'real-live-biz', 'description_en' => 'A complete, original description of this business and the services it offers in Qatar.']);
         $this->business(['is_demo' => true, 'slug' => 'demo-biz']);
         $this->business(['is_demo' => false, 'slug' => 'pending-biz'], 'pending');
 
@@ -185,7 +185,7 @@ class PublicSiteTest extends TestCase
 
     public function test_sitemap_is_well_formed_xml(): void
     {
-        $this->business(['is_demo' => false, 'slug' => 'well-formed-biz']);
+        $this->business(['is_demo' => false, 'slug' => 'well-formed-biz', 'description_en' => 'A complete, original description of this business and the services it offers in Qatar.']);
 
         foreach (['/sitemap.xml', '/sitemaps/pages.xml', '/sitemaps/taxonomy.xml', '/sitemaps/businesses-1.xml'] as $path) {
             $xml = $this->get($path)->assertOk()->getContent();

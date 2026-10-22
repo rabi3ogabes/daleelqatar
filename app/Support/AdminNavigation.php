@@ -59,6 +59,7 @@ final class AdminNavigation
             ]))],
             ['heading' => __('admin.nav.system'), 'items' => array_values(array_filter([
                 $can('analytics.view') ? ['label' => __('admin.nav.analytics'), 'route' => 'admin.analytics.index', 'icon' => 'chart-line', 'pattern' => 'admin.analytics.*'] : null,
+                $can('settings.manage') ? ['label' => __('adsense.nav'), 'route' => 'admin.adsense.index', 'icon' => 'badge-dollar-sign', 'pattern' => 'admin.adsense.*'] : null,
                 $can('audit.view') ? ['label' => __('admin.nav.audit'), 'route' => 'admin.audit.index', 'icon' => 'file-clock', 'pattern' => 'admin.audit.*'] : null,
                 $can('settings.manage') ? ['label' => __('admin.nav.settings'), 'route' => 'admin.settings.edit', 'icon' => 'settings', 'pattern' => 'admin.settings.*'] : null,
             ]))],

@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Services\AuditLogger;
 use App\Services\MediaService;
 use App\Services\SettingsService;
+use App\Support\AdsenseReadiness;
 use App\Support\Sitemap;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,6 +37,7 @@ class SettingsController extends Controller
 
     public function update(Request $request, SettingsService $settings, MediaService $media, AuditLogger $audit, string $group): RedirectResponse
     {
+        AdsenseReadiness::forget();
         abort_unless(in_array($group, SettingsService::groups(), true), 404);
         $defs = collect(SettingsService::defaults())->filter(fn ($d) => $d['group'] === $group);
         $maxKb = (int) setting('uploads.max_image_kb', 5120);

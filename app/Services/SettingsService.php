@@ -81,10 +81,15 @@ class SettingsService
             ]],
             'seo.sitemap_enabled' => ['group' => 'seo', 'type' => 'boolean', 'value' => true],
             'seo.indexing_enabled' => ['group' => 'seo', 'type' => 'boolean', 'value' => true],
+            'seo.noindex_thin_listings' => ['group' => 'seo', 'type' => 'boolean', 'value' => true],
             'analytics.track_views' => ['group' => 'seo', 'type' => 'boolean', 'value' => true],
             'analytics.track_searches' => ['group' => 'seo', 'type' => 'boolean', 'value' => true],
+            'analytics.track_visits' => ['group' => 'seo', 'type' => 'boolean', 'value' => true],
+            'analytics.public_counts' => ['group' => 'seo', 'type' => 'boolean', 'value' => true],
+            'analytics.public_counts_min' => ['group' => 'seo', 'type' => 'integer', 'value' => 10],
 
             // Google & search-engine integrations (all optional; nothing loads until an ID is set)
+            'integrations.search_console_verified' => ['group' => 'integrations', 'type' => 'boolean', 'value' => false],
             'integrations.google_verification' => ['group' => 'integrations', 'type' => 'text', 'value' => null, 'pattern' => '/^[A-Za-z0-9_\-]{10,100}$/', 'meta' => true],
             'integrations.bing_verification' => ['group' => 'integrations', 'type' => 'text', 'value' => null, 'pattern' => '/^[A-Za-z0-9]{10,64}$/', 'meta' => true],
             'integrations.yandex_verification' => ['group' => 'integrations', 'type' => 'text', 'value' => null, 'pattern' => '/^[A-Za-z0-9]{10,64}$/', 'meta' => true],

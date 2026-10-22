@@ -1,4 +1,4 @@
-@props(['segments' => [], 'title', 'centerLabel' => null, 'max' => 5])
+@props(['segments' => [], 'title', 'centerLabel' => null, 'max' => 5, 'stacked' => false])
 {{-- Donut with legend. $segments: [['label' => …, 'value' => int]]. Beyond $max slices fold into "Other". --}}
 @php
     $palette = \App\Support\ChartPalette::CATEGORICAL;
@@ -15,7 +15,7 @@
         return $slice;
     });
 @endphp
-<figure {{ $attributes->class('flex flex-col items-center gap-6 sm:flex-row') }} x-data="{ h: null }">
+<figure {{ $attributes->class(['flex flex-col items-center gap-6', 'sm:flex-row' => ! $stacked]) }} x-data="{ h: null }">
     <figcaption class="sr-only">{{ $title }}</figcaption>
     <div class="relative size-40 shrink-0">
         <svg viewBox="0 0 42 42" class="size-full -rotate-90" role="img" aria-label="{{ $title }}">
