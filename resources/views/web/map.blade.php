@@ -3,7 +3,12 @@
         'dataUrl' => route('map.data'),
         'profileBase' => route('business.show', ['business' => '__SLUG__']),
         'categories' => (object) [],
-        'labels' => ['view' => __('directory.map.view'), 'showing' => __('directory.map.showing', ['count' => ':count'])],
+        'labels' => [
+            'view' => __('directory.map.view'),
+            'showing' => __('directory.map.showing', ['count' => ':count']),
+            'backup' => __('directory.map.backup_tiles'),
+            'no_tiles' => __('directory.map.no_tiles'),
+        ],
     ];
 @endphp
 <x-layouts.app>
@@ -38,6 +43,17 @@
                 <div data-map-loading class="absolute inset-0 z-[500] flex items-center justify-center bg-white/70 backdrop-blur-sm">
                     <span class="inline-flex items-center gap-2 rounded-full bg-navy-900 px-4 py-2 text-sm font-medium text-gold-200 shadow-lift"><x-icon name="loader-circle" class="size-4 animate-spin" />{{ __('directory.map.loading') }}</span>
                 </div>
+                {{-- Shown only when the businesses could not be loaded (network error, timeout) --}}
+                <div data-map-error hidden class="absolute inset-0 z-[600] flex items-center justify-center bg-white/85 p-6 backdrop-blur-sm" role="alert">
+                    <div class="max-w-sm text-center">
+                        <span class="mx-auto flex size-12 items-center justify-center rounded-2xl bg-warning-soft text-warning"><x-icon name="triangle-alert" class="size-6" /></span>
+                        <p class="mt-3 font-semibold text-navy-900">{{ __('directory.map.error_title') }}</p>
+                        <p class="mt-1 text-sm leading-6 text-muted-strong">{{ __('directory.map.error_text') }}</p>
+                        <button type="button" data-map-retry class="btn btn-primary mt-4"><x-icon name="refresh-cw" class="size-4" />{{ __('directory.map.retry') }}</button>
+                    </div>
+                </div>
+                {{-- Small notice when the map background comes from the backup provider, or could not load at all --}}
+                <p data-map-notice hidden class="pointer-events-none absolute inset-x-3 top-3 z-[550] mx-auto w-fit max-w-[calc(100%-1.5rem)] rounded-full bg-navy-900/90 px-4 py-1.5 text-center text-xs font-medium text-white shadow-lift" role="status"></p>
             </div>
             <div class="flex flex-col gap-2 border-t border-navy-50 px-4 py-3 text-xs text-muted-strong sm:flex-row sm:items-center sm:justify-between">
                 <span class="font-semibold text-navy-900" data-map-count>{{ __('directory.map.showing', ['count' => format_number($total)]) }}</span>
