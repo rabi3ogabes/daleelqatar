@@ -15,16 +15,18 @@ const QATAR_BOUNDS = L.latLngBounds([24.45, 50.7], [26.2, 51.7]);
  * Map backgrounds, best first. If a provider is unreachable (blocked network,
  * outage, content blocker) the map switches to the next one instead of
  * staying blank; the businesses are shown whatever the background does.
+ * (CARTO is not used: it now answers every tile with the same watermark
+ * image, which loads "successfully" and so would never trigger the switch.)
  */
 const OSM = '&copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a>';
 const TILE_PROVIDERS = [
     {
-        url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-        options: { subdomains: 'abcd', maxZoom: 19, attribution: `${OSM} &copy; <a href="https://carto.com/attributions" rel="noopener">CARTO</a>` },
-    },
-    {
         url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
         options: { maxZoom: 19, attribution: OSM },
+    },
+    {
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        options: { maxZoom: 19, maxNativeZoom: 18, attribution: 'Tiles &copy; <a href="https://www.esri.com" rel="noopener">Esri</a>' },
     },
 ];
 
