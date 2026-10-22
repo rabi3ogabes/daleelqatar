@@ -40,6 +40,13 @@ document.addEventListener(
     true,
 );
 
+// A readable message when the server answered without one (e.g. a gateway timeout page).
+function failure(res, data) {
+    const html = document.documentElement.dataset;
+    const message = data.message || ([502, 503, 504].includes(res.status) ? html.errorTimeout : html.errorGeneric) || 'Request failed';
+    return Object.assign(new Error(message), { status: res.status, data });
+}
+
 export async function postJson(url, body = {}) {
     await ensureToken();
     const res = await fetch(url, {
@@ -49,7 +56,7 @@ export async function postJson(url, body = {}) {
         body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw Object.assign(new Error(data.message || 'Request failed'), { status: res.status, data });
+    if (!res.ok) throw failure(res, data);
     return data;
 }
 
@@ -62,7 +69,7 @@ export async function postForm(url, formData) {
         body: formData,
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw Object.assign(new Error(data.message || 'Request failed'), { status: res.status, data });
+    if (!res.ok) throw failure(res, data);
     return data;
 }
 

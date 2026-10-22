@@ -159,6 +159,8 @@ return [
         'google_not_configured' => 'Google Maps is not set up yet.',
         'ai_not_configured' => 'AI is not set up — no description or services were written.',
         'ai_failed' => 'AI suggestions could not be created this time. Try again later.',
+        'out_of_time' => 'The website check did not fit in this run. Run it again to finish it.',
+        'ai_out_of_time' => 'The AI step did not fit in this run. Run it again to add the description and services.',
     ],
     'reasons' => [
         'name_exact' => 'Same name',

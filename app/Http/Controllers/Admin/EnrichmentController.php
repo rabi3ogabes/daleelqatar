@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Business;
 use App\Models\BusinessSuggestion;
+use App\Support\Deadline;
 use App\Support\Enrichment\AiWriter;
 use App\Support\Enrichment\DataQuality;
 use App\Support\Enrichment\Enricher;
@@ -31,6 +32,9 @@ class EnrichmentController extends Controller
     public const TABS = ['pending', 'no_website', 'applied', 'rejected', 'empty'];
 
     private const BUDGET_SECONDS = 18.0;
+
+    /** Vercel stops a request after 60 s; every step ends well before that. */
+    private const DEADLINE_SECONDS = 48.0;
 
     public function __construct(private readonly Enricher $enricher, private readonly AiWriter $ai) {}
 
@@ -66,6 +70,7 @@ class EnrichmentController extends Controller
             return response()->json(['message' => __('enrichment.errors.ai_not_configured')], 422);
         }
 
+        Deadline::start(self::DEADLINE_SECONDS);
         $cursor = (int) ($data['cursor'] ?? 0);
         $scope = $data['mode'] === 'names' ? 'missing_arabic' : $data['scope'];
         $started = microtime(true);
@@ -87,7 +92,8 @@ class EnrichmentController extends Controller
             }
         } else {
             $options = ['google' => $request->boolean('google', true), 'website' => $request->boolean('website', true), 'ai' => $request->boolean('ai', true)];
-            while (microtime(true) - $started < self::BUDGET_SECONDS) {
+            // The next business only starts when a full check (Google, website, AI) still fits before the deadline.
+            while (microtime(true) - $started < self::BUDGET_SECONDS && ($processed === 0 || Deadline::has(32))) {
                 $business = $this->scope(Business::query(), $scope)->where('id', '>', $cursor)->orderBy('id')->first();
                 if ($business === null) {
                     break;
@@ -114,6 +120,7 @@ class EnrichmentController extends Controller
 
     public function business(Request $request, int $business): RedirectResponse
     {
+        Deadline::start(self::DEADLINE_SECONDS);
         $model = Business::query()->findOrFail($business);
         $suggestion = $this->enricher->run($model);
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\Business;
+use App\Support\Deadline;
 use App\Support\Enrichment\Enricher;
 use Illuminate\Console\Command;
 use Throwable;
@@ -50,7 +51,8 @@ class EnrichCommand extends Command
         $options = ['google' => ! $this->option('no-google'), 'website' => ! $this->option('no-website'), 'ai' => ! $this->option('no-ai')];
         $pending = 0;
         foreach ($businesses as $business) {
-            if ($budget > 0 && microtime(true) - $started > $budget) {
+            // Inside a web request (the daily cron) a business only starts when it can finish in time.
+            if (($budget > 0 && microtime(true) - $started > $budget) || ! Deadline::has(32)) {
                 break;
             }
             try {
