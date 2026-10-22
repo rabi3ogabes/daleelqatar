@@ -163,7 +163,7 @@ final class BusinessImporter
 
     private function create(array $record, array $options): Business
     {
-        $categoryIds = $this->categories->match($record['categories'] ?? [], $record['tags'] ?? [], $record['name_en'] ?? $record['name_ar']);
+        $categoryIds = $this->categories->match($record['categories'] ?? [], $record['tags'] ?? [], $record['name_en'] ?? null, ['name_ar' => $record['name_ar'] ?? null, 'description' => $record['description'] ?? null]);
         if (! empty($options['default_category_id']) && $this->categories->isFallback($categoryIds[0])) {
             $categoryIds = [(int) $options['default_category_id']];
         }
@@ -257,7 +257,7 @@ final class BusinessImporter
 
         // A better category than "Other businesses".
         if ($this->categories->isFallback((int) $business->category_id)) {
-            $ids = $this->categories->match($record['categories'] ?? [], $record['tags'] ?? [], $business->name_en);
+            $ids = $this->categories->match($record['categories'] ?? [], $record['tags'] ?? [], $business->name_en, ['name_ar' => $business->name_ar, 'description' => $record['description'] ?? null]);
             if (! $this->categories->isFallback($ids[0])) {
                 $fill['category_id'] = $ids[0];
             }

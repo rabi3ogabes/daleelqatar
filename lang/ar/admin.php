@@ -619,6 +619,7 @@ return [
             'business_verified' => 'توثيق نشاط',
             'business_unverified' => 'سحب توثيق نشاط',
             'business_owner_changed' => 'تغيير مالك نشاط',
+            'business_category_changed' => 'تغيير التصنيف',
             'business_logo_updated' => 'تحديث الشعار',
             'business_cover_updated' => 'تحديث صورة الغلاف',
             'business_gallery_added' => 'إضافة صور للمعرض',

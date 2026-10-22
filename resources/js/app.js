@@ -1,7 +1,8 @@
 import Alpine from 'alpinejs';
 import collapse from '@alpinejs/collapse';
 import focus from '@alpinejs/focus';
-import { beacon, postJson } from './bootstrap';
+import { beacon, postForm, postJson } from './bootstrap';
+import { drawLogo, monogram, rasterizeSvg, STYLE_NAMES, toBlob } from './logo-designer';
 
 Alpine.plugin(collapse);
 Alpine.plugin(focus);
@@ -27,16 +28,23 @@ Alpine.store('confirm', {
     confirmLabel: '',
     tone: 'danger',
     form: null,
-    ask(form, { title, message, confirmLabel, tone = 'danger' }) {
-        Object.assign(this, { form, title, message, confirmLabel, tone, open: true });
+    submitter: null,
+    ask(form, { title, message, confirmLabel, tone = 'danger' }, submitter = null) {
+        Object.assign(this, { form, submitter, title, message, confirmLabel, tone, open: true, onAccept: null });
     },
+    onAccept: null,
     accept() {
-        const form = this.form;
+        const { form, submitter, onAccept } = this;
         this.open = false;
         this.form = null;
+        this.submitter = null;
+        this.onAccept = null;
+        if (onAccept) onAccept();
         if (form) {
             form.dataset.confirmed = '1';
-            form.requestSubmit ? form.requestSubmit() : form.submit();
+            // Re-submit with the button that was pressed, so its name/value (e.g. action=apply) is sent.
+            if (form.requestSubmit) form.requestSubmit(submitter && submitter.form === form ? submitter : undefined);
+            else form.submit();
         }
     },
 });
@@ -51,7 +59,7 @@ document.addEventListener('submit', (e) => {
         message: form.dataset.confirm,
         confirmLabel: form.dataset.confirmLabel || document.documentElement.dataset.confirmLabel,
         tone: form.dataset.confirmTone || 'danger',
-    });
+    }, e.submitter);
 });
 
 // Prevent double submissions (double clicks, Enter pressed twice) and show a busy state.
@@ -534,6 +542,212 @@ Alpine.data('enrichmentRunner', (cfg) => ({
     },
     stop() {
         this.stopping = true;
+    },
+}));
+
+/* Smart categories: scan runner, "apply confident" runner and row actions. */
+Alpine.data('categoryScanner', (cfg) => ({
+    cfg,
+    scope: cfg.scope || 'unchecked',
+    ai: cfg.ai,
+    busy: false,
+    finished: false,
+    stopping: false,
+    processed: 0,
+    suggested: 0,
+    aiCount: 0,
+    remaining: 0,
+    error: '',
+    get percent() {
+        const total = this.processed + this.remaining;
+        return total ? Math.min(100, Math.round((this.processed / total) * 100)) : 0;
+    },
+    async start() {
+        Object.assign(this, { busy: true, finished: false, stopping: false, processed: 0, suggested: 0, aiCount: 0, error: '' });
+        this.remaining = this.cfg.counts[this.scope] || 0;
+        let cursor = 0;
+        let failures = 0;
+        while (!this.stopping) {
+            try {
+                const r = await postJson(this.cfg.url, { scope: this.scope, cursor, ai: this.ai });
+                failures = 0;
+                this.error = '';
+                cursor = r.cursor;
+                this.processed += r.processed;
+                this.suggested += r.suggested;
+                this.aiCount += r.ai;
+                this.remaining = r.remaining;
+                if (r.done || r.processed === 0) break;
+            } catch (err) {
+                this.error = err.message;
+                if (err.status === 422 || ++failures >= 4) break;
+                await new Promise((resolve) => setTimeout(resolve, 2000 * failures));
+            }
+        }
+        this.busy = false;
+        this.finished = true;
+    },
+    stop() {
+        this.stopping = true;
+    },
+}));
+
+Alpine.data('confidentApplier', (cfg) => ({
+    cfg,
+    busy: false,
+    applied: 0,
+    error: '',
+    get percent() {
+        return this.cfg.total ? Math.min(100, Math.round((this.applied / this.cfg.total) * 100)) : 0;
+    },
+    run() {
+        if (this.busy) return;
+        Alpine.store('confirm').ask(null, { message: this.cfg.confirm, tone: 'primary' });
+        Alpine.store('confirm').onAccept = () => this.go();
+    },
+    async go() {
+        this.busy = true;
+        this.error = '';
+        let failures = 0;
+        for (;;) {
+            try {
+                const r = await postJson(this.cfg.url, { from: this.cfg.from || null, to: this.cfg.to || null });
+                failures = 0;
+                this.applied += r.applied;
+                if (r.done || r.applied === 0) break;
+            } catch (err) {
+                this.error = err.message;
+                if (err.status === 422 || ++failures >= 3) break;
+                await new Promise((resolve) => setTimeout(resolve, 2000 * failures));
+            }
+        }
+        this.busy = false;
+        if (!this.error) window.location.reload();
+    },
+}));
+
+Alpine.data('categoryRow', () => ({
+    busy: false,
+    gone: false,
+    async act(form) {
+        if (this.busy) return;
+        this.busy = true;
+        try {
+            const r = await postForm(form.action, new FormData(form));
+            this.gone = true;
+            Alpine.store('toast').show(r.message);
+        } catch (err) {
+            Alpine.store('toast').show(err.message, 'error');
+            this.busy = false;
+        }
+    },
+}));
+
+/* Admin logo studio: find the real logo on the company website or design a branded one. */
+Alpine.data('logoStudio', (cfg) => ({
+    cfg,
+    open: false,
+    tab: 'website',
+    searching: false,
+    searched: false,
+    sites: [],
+    candidates: [],
+    message: '',
+    error: '',
+    selected: null,
+    styles: STYLE_NAMES,
+    previews: {},
+    initials: '',
+    showArabic: true,
+    saving: false,
+    renderTimer: null,
+    init() {
+        this.initials = monogram(this.primaryName());
+        this.$watch('initials', () => this.scheduleRender());
+        this.$watch('showArabic', () => this.scheduleRender());
+    },
+    primaryName() {
+        return this.cfg.nameEn || this.cfg.nameAr || '';
+    },
+    secondaryName() {
+        return this.cfg.nameEn && this.cfg.nameAr && this.showArabic ? this.cfg.nameAr : '';
+    },
+    show(tab) {
+        this.open = true;
+        this.switchTab(tab);
+    },
+    close() {
+        if (!this.saving) this.open = false;
+    },
+    switchTab(tab) {
+        this.tab = tab;
+        this.selected = null;
+        if (tab === 'website' && !this.searched && !this.searching) this.search();
+        if (tab === 'design') this.$nextTick(() => this.renderAll());
+    },
+    async search() {
+        Object.assign(this, { searching: true, error: '', message: '', candidates: [], selected: null });
+        try {
+            const r = await postJson(this.cfg.findUrl);
+            this.sites = r.sites || [];
+            this.candidates = r.candidates || [];
+            this.message = r.message || '';
+            if (this.candidates.length === 1) this.selected = { type: 'candidate', id: this.candidates[0].id };
+        } catch (err) {
+            this.error = err.message || this.cfg.i18n.failed;
+        } finally {
+            this.searching = false;
+            this.searched = true;
+        }
+    },
+    scheduleRender() {
+        clearTimeout(this.renderTimer);
+        this.renderTimer = setTimeout(() => this.renderAll(), 120);
+    },
+    async renderAll() {
+        if (this.tab !== 'design') return;
+        const opts = { name: this.primaryName(), secondary: this.secondaryName(), initials: this.initials.trim() };
+        for (const style of this.styles) {
+            const canvas = document.createElement('canvas');
+            await drawLogo(canvas, { ...opts, style });
+            this.previews[style] = canvas.toDataURL('image/png');
+        }
+        if (!this.selected) this.selected = { type: 'style', id: 'navy' };
+    },
+    isSelected(type, id) {
+        return this.selected?.type === type && this.selected?.id === id;
+    },
+    async save() {
+        if (!this.selected || this.saving) return;
+        this.saving = true;
+        this.error = '';
+        try {
+            let r;
+            if (this.selected.type === 'candidate') {
+                const c = this.candidates.find((x) => x.id === this.selected.id);
+                if (c.kind === 'raster') {
+                    r = await postJson(this.cfg.applyUrl, { candidate: c.id, origin: 'website' });
+                } else {
+                    const fd = new FormData();
+                    fd.append('logo', await rasterizeSvg(c.preview), 'logo.png');
+                    fd.append('origin', 'website');
+                    fd.append('source_url', c.url || '');
+                    r = await postForm(this.cfg.applyUrl, fd);
+                }
+            } else {
+                const canvas = document.createElement('canvas');
+                await drawLogo(canvas, { style: this.selected.id, name: this.primaryName(), secondary: this.secondaryName(), initials: this.initials.trim() });
+                const fd = new FormData();
+                fd.append('logo', await toBlob(canvas), 'logo.png');
+                fd.append('origin', 'generated');
+                fd.append('style', this.selected.id);
+                r = await postForm(this.cfg.applyUrl, fd);
+            }
+            window.location.assign(r.redirect);
+        } catch (err) {
+            this.error = err.message || this.cfg.i18n.failed;
+            this.saving = false;
+        }
     },
 }));
 

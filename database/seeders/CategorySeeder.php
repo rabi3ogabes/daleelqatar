@@ -31,6 +31,7 @@ class CategorySeeder extends Seeder
                 ['shoes-bags', 'أحذية وحقائب', 'Shoes & Bags'],
                 ['gifts-flowers', 'هدايا وزهور', 'Gifts & Flowers'],
                 ['kids-toys', 'مستلزمات أطفال وألعاب', 'Kids & Toys'],
+                ['shopping-malls', 'مراكز تسوق', 'Shopping Malls'],
             ]],
             ['health-wellness', 'صحة وعافية', 'Health & Wellness', 'stethoscope', true, 'المستشفيات والعيادات والصيدليات ومراكز اللياقة في جميع مناطق قطر.', 'Hospitals, clinics, pharmacies and fitness centres across Qatar.', [
                 ['hospitals', 'مستشفيات', 'Hospitals'],
@@ -40,6 +41,7 @@ class CategorySeeder extends Seeder
                 ['fitness-gyms', 'لياقة وأندية رياضية', 'Fitness & Gyms'],
                 ['physiotherapy', 'علاج طبيعي', 'Physiotherapy'],
                 ['medical-equipment', 'معدات ومستلزمات طبية', 'Medical Equipment'],
+                ['opticians', 'نظارات وبصريات', 'Opticians'],
             ]],
             ['beauty-salons', 'تجميل وصالونات', 'Beauty & Salons', 'scissors', true, 'صالونات التجميل والحلاقة ومراكز السبا والعناية.', 'Beauty salons, barbershops, spas and personal care.', [
                 ['ladies-salons', 'صالونات نسائية', 'Ladies Salons'],
@@ -53,6 +55,7 @@ class CategorySeeder extends Seeder
                 ['car-rental', 'تأجير سيارات', 'Car Rental'],
                 ['car-wash', 'غسيل وتلميع سيارات', 'Car Wash & Detailing'],
                 ['spare-parts', 'قطع غيار', 'Spare Parts'],
+                ['petrol-stations', 'محطات وقود', 'Petrol Stations'],
             ]],
             ['home-services', 'خدمات منزلية', 'Home Services', 'house', true, 'التنظيف والصيانة والتكييف ونقل الأثاث وخدمات المنزل.', 'Cleaning, maintenance, air-conditioning, moving and home services.', [
                 ['cleaning', 'تنظيف', 'Cleaning'],
@@ -73,6 +76,7 @@ class CategorySeeder extends Seeder
                 ['printing', 'طباعة', 'Printing'],
                 ['pro-services', 'تعقيب ومعاملات', 'PRO & Typing Services'],
                 ['business-centers', 'مراكز أعمال', 'Business Centres'],
+                ['media-publishing', 'إعلام ونشر', 'Media & Publishing'],
             ]],
             ['education-training', 'تعليم وتدريب', 'Education & Training', 'graduation-cap', true, 'المدارس والجامعات ومراكز التدريب ومعاهد اللغات.', 'Schools, universities, training centres and language institutes.', [
                 ['schools', 'مدارس', 'Schools'],
@@ -86,6 +90,7 @@ class CategorySeeder extends Seeder
                 ['serviced-apartments', 'شقق فندقية', 'Serviced Apartments'],
                 ['travel-agencies', 'وكالات سفر', 'Travel Agencies'],
                 ['tours-safari', 'رحلات وسفاري', 'Tours & Desert Safari'],
+                ['parks-attractions', 'حدائق ومعالم سياحية', 'Parks & Attractions'],
             ]],
             ['real-estate', 'عقارات', 'Real Estate', 'building-2', true, 'المكاتب العقارية والمطورون وإدارة الأملاك.', 'Real estate agencies, developers and property management.', [
                 ['real-estate-agencies', 'مكاتب عقارية', 'Real Estate Agencies'],
@@ -136,12 +141,18 @@ class CategorySeeder extends Seeder
                 ['transport-companies', 'شركات نقل', 'Transport Companies'],
                 ['marine-shipping', 'خدمات بحرية وملاحة', 'Marine & Shipping'],
                 ['courier-delivery', 'بريد سريع وتوصيل', 'Courier & Delivery'],
+                ['airlines-aviation', 'طيران وخطوط جوية', 'Airlines & Aviation'],
             ]],
             ['finance-insurance', 'البنوك والتمويل والتأمين', 'Banks, Finance & Insurance', 'landmark', true, 'البنوك ومحلات الصرافة وشركات التأمين والاستثمار والتمويل.', 'Banks, exchange houses, insurance, investment and finance companies.', [
                 ['banks', 'بنوك', 'Banks'],
                 ['exchange-houses', 'صرافة وتحويل أموال', 'Exchange Houses'],
                 ['insurance', 'تأمين', 'Insurance'],
                 ['investment-finance', 'استثمار وتمويل', 'Investment & Finance'],
+            ]],
+            ['government-community', 'جهات حكومية ومجتمعية', 'Government & Community', 'building', false, 'الوزارات والجهات الحكومية والسفارات والقنصليات والجمعيات في قطر.', 'Ministries, government offices, embassies, consulates and associations in Qatar.', [
+                ['government-offices', 'جهات حكومية', 'Government Offices'],
+                ['embassies-consulates', 'سفارات وقنصليات', 'Embassies & Consulates'],
+                ['non-profits', 'جمعيات ومؤسسات خيرية', 'Non-profits & Associations'],
             ]],
             ['other-businesses', 'أعمال أخرى', 'Other Businesses', 'layout-grid', false, 'أعمال وخدمات متنوعة أخرى في قطر.', 'Other businesses and services in Qatar.', []],
         ];

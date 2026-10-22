@@ -164,6 +164,50 @@
                 </x-dash.panel>
             @endunless @endcan
 
+            {{-- Category check --}}
+            @can('businesses.update')@unless($business->trashed())
+                @php
+                    $categoryReview = \App\Models\CategoryReview::query()->with(['suggested'])->where('business_id', $business->id)->first();
+                    $proposed = $categoryReview?->isPending() && $categoryReview->suggested_category_id ? $categoryReview : null;
+                @endphp
+                <x-dash.panel :title="__('category_review.panel.title')">
+                    <x-slot:actions>
+                        <form method="POST" action="{{ route('admin.category-review.check', $business->id) }}">@csrf<button class="btn btn-outline btn-sm" data-busy><x-icon name="scan-search" class="size-4" />{{ $categoryReview ? __('category_review.panel.recheck') : __('category_review.panel.check') }}</button></form>
+                    </x-slot:actions>
+                    @if($proposed)
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-center">
+                            <div class="min-w-0 flex-1">
+                                <p class="flex flex-wrap items-center gap-1.5 text-sm">
+                                    <span class="rounded-lg bg-navy-50 px-2 py-1 text-xs text-muted-strong line-through decoration-navy-300">{{ $business->category?->t('name') }}</span>
+                                    <x-icon name="arrow-right" class="size-3.5 text-gold-600 rtl:-scale-x-100" />
+                                    <span class="rounded-lg bg-gold-50 px-2 py-1 text-xs font-semibold text-navy-900 ring-1 ring-gold-200">{{ $proposed->suggested->t('name') }}</span>
+                                    <span class="badge {{ ['high' => 'badge-success', 'medium' => 'badge-warning', 'low' => 'badge-danger'][$proposed->level()] }} tabular-nums">{{ $proposed->confidence }}%</span>
+                                    @if($proposed->method === 'ai')<span class="badge badge-gold"><x-icon name="sparkles" class="size-3" />AI</span>@endif
+                                </p>
+                                @php $reason = ((array) $proposed->reasons)[0] ?? null; @endphp
+                                @if($reason)
+                                    <p class="mt-2 text-xs leading-5 text-muted-strong"><span class="font-medium">{{ __('category_review.fields.'.$reason['field']) }}:</span> <span dir="auto">{{ $reason['field'] === 'ai' && app()->getLocale() === 'ar' && ! empty($reason['text_ar']) ? $reason['text_ar'] : $reason['text'] }}</span></p>
+                                @endif
+                            </div>
+                            <div class="flex shrink-0 gap-2">
+                                <form method="POST" action="{{ route('admin.category-review.apply', $proposed) }}">@csrf<button class="btn btn-primary btn-sm"><x-icon name="check" class="size-4" />{{ __('category_review.apply') }}</button></form>
+                                <form method="POST" action="{{ route('admin.category-review.keep', $proposed) }}">@csrf<button class="btn btn-ghost btn-sm">{{ __('category_review.keep') }}</button></form>
+                            </div>
+                        </div>
+                    @else
+                        <p class="flex items-center gap-2 text-sm text-muted-strong">
+                            @if(! $categoryReview)
+                                <x-icon name="circle-help" class="size-4 text-muted" />{{ __('category_review.panel.not_checked') }}
+                            @elseif($categoryReview->isPending())
+                                <x-icon name="circle-alert" class="size-4 text-warning" />{{ __('category_review.panel.unclear') }}
+                            @else
+                                <x-icon name="circle-check" class="size-4 text-success" />{{ __('category_review.panel.correct') }} <span class="text-navy-900">{{ $business->category?->t('name') }}</span>
+                            @endif
+                        </p>
+                    @endif
+                </x-dash.panel>
+            @endunless @endcan
+
             {{-- Claims, verification, reports --}}
             <div class="grid gap-6 lg:grid-cols-2">
                 <x-dash.panel :title="__('admin.claims.title')" :padding="false">
@@ -230,6 +274,10 @@
         {{-- Actions --}}
         <aside class="space-y-6">
             @if(! $business->trashed())
+                @can('businesses.update')
+                    @include('admin.businesses.partials.logo-studio')
+                @endcan
+
                 @can('businesses.moderate')
                     <x-dash.panel :title="__('admin.businesses.moderation')">
                         <div class="space-y-2" x-data="{ open: null }">

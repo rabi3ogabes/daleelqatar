@@ -189,13 +189,13 @@ class BusinessManager
         }
     }
 
-    public function setLogo(Business $business, UploadedFile $file): void
+    public function setLogo(Business $business, UploadedFile $file, array $metadata = []): void
     {
         $stored = $this->media->storeImage($file, "businesses/{$business->uuid}/logo", 600, 600, 88);
         $old = $business->logo_path;
         $business->forceFill(['logo_path' => $stored['path']])->save();
         $this->media->delete($old);
-        $this->audit->log('business.logo.updated', $business);
+        $this->audit->log('business.logo.updated', $business, metadata: $metadata);
     }
 
     public function setCover(Business $business, UploadedFile $file): void

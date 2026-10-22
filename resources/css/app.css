@@ -114,6 +114,8 @@
     .card { @apply rounded-(--radius-card) border border-navy-100 bg-white shadow-soft; }
     .card-pad { @apply p-5 sm:p-6; }
     .card-hover { @apply transition duration-300 hover:-translate-y-0.5 hover:border-gold-200 hover:shadow-lift; }
+    /* Transparency grid behind image previews */
+    .bg-checker { background: repeating-conic-gradient(#eef1f6 0% 25%, #ffffff 0% 50%) 50% / 18px 18px; }
     .divider-gold { @apply h-px w-12 bg-gradient-to-r from-gold-500 to-gold-300; }
 
     /* Typography */

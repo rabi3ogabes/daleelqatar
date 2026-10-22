@@ -81,6 +81,11 @@ class Business extends Model
             if ($business->wasRecentlyCreated || $business->wasChanged()) {
                 IndexNow::queue($business);
             }
+            // A category chosen by hand wins over an open suggestion from the category check.
+            if ($business->wasChanged('category_id')) {
+                CategoryReview::query()->where('business_id', $business->id)->where('status', 'pending')
+                    ->update(['status' => 'kept', 'current_category_id' => $business->category_id, 'reviewed_by' => auth()->id(), 'reviewed_at' => now()]);
+            }
         });
     }
 

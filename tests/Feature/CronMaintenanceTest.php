@@ -40,6 +40,7 @@ class CronMaintenanceTest extends TestCase
                     'queue:prune-failed' => 'ok',
                     'auth:clear-resets' => 'ok',
                     'model:prune' => 'ok',
+                    'categories:check' => 'ok',
                 ],
             ]);
 

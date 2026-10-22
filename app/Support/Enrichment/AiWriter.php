@@ -24,4 +24,13 @@ interface AiWriter
      * @return array{found: bool, description_en: ?string, description_ar: ?string, tagline_en: ?string, tagline_ar: ?string, services: list<array{name_en: string, name_ar: string}>}
      */
     public function profileFromWebsite(string $name, ?string $category, array $pages): array;
+
+    /**
+     * The best category for each business, chosen only from the given taxonomy.
+     *
+     * @param  list<array{id: int, name: ?string, name_ar: ?string, labels: list<string>, services: ?string, description: ?string, current: ?string}>  $businesses
+     * @param  array<string, string>  $taxonomy  slug => "Parent › Category"
+     * @return array<int, array{category: string, secondary: list<string>, confidence: int, reason_en: string, reason_ar: string}> id => verdict
+     */
+    public function categorize(array $businesses, array $taxonomy): array;
 }

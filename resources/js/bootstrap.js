@@ -53,6 +53,19 @@ export async function postJson(url, body = {}) {
     return data;
 }
 
+export async function postForm(url, formData) {
+    await ensureToken();
+    const res = await fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'X-CSRF-TOKEN': token ?? '', 'X-Requested-With': 'XMLHttpRequest' },
+        body: formData,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error(data.message || 'Request failed'), { status: res.status, data });
+    return data;
+}
+
 // Analytics beacons are CSRF-exempt (they may come from a cached page) and rate-limited server-side.
 export function beacon(url, body = {}) {
     const fd = new FormData();

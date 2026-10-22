@@ -25,6 +25,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified', 'can:adm
         Route::post('/businesses/{business:id}/verify', [Admin\BusinessController::class, 'verify'])->middleware('can:businesses.verify')->name('businesses.verify');
         Route::post('/businesses/{business:id}/owner', [Admin\BusinessController::class, 'owner'])->middleware('can:businesses.update')->name('businesses.owner');
         Route::post('/businesses/{business:id}/logo', [Admin\BusinessController::class, 'logo'])->middleware('can:businesses.update')->name('businesses.logo');
+        Route::post('/businesses/{business:id}/logo/find', [Admin\LogoController::class, 'find'])->middleware(['can:businesses.update', 'throttle:20,1'])->name('businesses.logo.find');
+        Route::post('/businesses/{business:id}/logo/apply', [Admin\LogoController::class, 'apply'])->middleware(['can:businesses.update', 'throttle:30,1'])->name('businesses.logo.apply');
         Route::post('/businesses/{business:id}/cover', [Admin\BusinessController::class, 'cover'])->middleware('can:businesses.update')->name('businesses.cover');
         Route::post('/businesses/{business:id}/gallery', [Admin\BusinessController::class, 'gallery'])->middleware('can:businesses.update')->name('businesses.gallery');
         Route::delete('/businesses/{business:id}/gallery/{image}', [Admin\BusinessController::class, 'destroyImage'])->middleware('can:businesses.update')->name('businesses.gallery.destroy');
@@ -65,6 +67,17 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified', 'can:adm
         Route::get('/claims/{claim}', [Admin\ClaimController::class, 'show'])->name('claims.show');
         Route::post('/claims/{claim}/decide', [Admin\ClaimController::class, 'decide'])->name('claims.decide');
         Route::get('/claims/{claim}/proof', [Admin\ClaimController::class, 'proof'])->name('claims.proof');
+    });
+
+    // Smart categories: check every listing's category and apply corrections.
+    Route::middleware('can:businesses.update')->group(function () {
+        Route::get('/categories/review', [Admin\CategoryReviewController::class, 'index'])->name('category-review.index');
+        Route::post('/categories/review/scan', [Admin\CategoryReviewController::class, 'scan'])->middleware('throttle:240,1')->name('category-review.scan');
+        Route::post('/categories/review/apply-confident', [Admin\CategoryReviewController::class, 'applyConfident'])->middleware('throttle:120,1')->name('category-review.apply-confident');
+        Route::post('/categories/review/bulk', [Admin\CategoryReviewController::class, 'bulk'])->name('category-review.bulk');
+        Route::post('/categories/review/{review}/apply', [Admin\CategoryReviewController::class, 'apply'])->whereNumber('review')->name('category-review.apply');
+        Route::post('/categories/review/{review}/keep', [Admin\CategoryReviewController::class, 'keep'])->whereNumber('review')->name('category-review.keep');
+        Route::post('/businesses/{business}/check-category', [Admin\CategoryReviewController::class, 'check'])->whereNumber('business')->middleware('throttle:30,1')->name('category-review.check');
     });
 
     Route::middleware('can:businesses.verify')->group(function () {

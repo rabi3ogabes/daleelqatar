@@ -368,35 +368,3 @@ class EnrichmentTest extends TestCase
         $this->getJson('/en/business/al-ansari-furniture-centre/google.json')->assertNotFound();
     }
 }
-
-/** Deterministic stand-in for the Claude writer. */
-class FakeAiWriter implements AiWriter
-{
-    public function available(): bool
-    {
-        return true;
-    }
-
-    public function arabicNames(array $businesses): array
-    {
-        $known = ['Al Ansari Furniture Centre' => 'مركز الأنصاري للأثاث', 'Pearl Trading W.L.L' => 'اللؤلؤة للتجارة'];
-
-        return collect($businesses)->mapWithKeys(fn ($b) => [$b['id'] => $known[$b['name']] ?? 'شركة'])->all();
-    }
-
-    public function profileFromWebsite(string $name, ?string $category, array $pages): array
-    {
-        return [
-            'found' => str_contains(implode(' ', $pages), 'majlis'),
-            'description_en' => 'Furniture showroom in Najma, Doha, supplying majlis seating, bedrooms and office furniture.',
-            'description_ar' => 'معرض أثاث في نجمة بالدوحة يوفر المجالس وغرف النوم وأثاث المكاتب.',
-            'tagline_en' => 'Home and office furniture since 1995',
-            'tagline_ar' => 'أثاث المنازل والمكاتب منذ 1995',
-            'services' => [
-                ['name_en' => 'Custom majlis seating', 'name_ar' => 'مجالس حسب الطلب'],
-                ['name_en' => 'Office furniture', 'name_ar' => 'أثاث مكتبي'],
-                ['name_en' => 'Curtains and upholstery', 'name_ar' => 'ستائر وتنجيد'],
-            ],
-        ];
-    }
-}
