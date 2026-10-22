@@ -50,7 +50,7 @@ class SecurityHeaders
             // Alpine.js evaluates directive expressions, which requires 'unsafe-eval'.
             "script-src 'self' 'nonce-{$nonce}' 'strict-dynamic' 'unsafe-eval' https:",
             "style-src 'self' 'unsafe-inline'",
-            // Map tiles (CARTO/OpenStreetMap), media and ad creatives.
+            // Map tiles (OpenStreetMap/Esri), media and ad creatives.
             "img-src 'self' data: blob: https:",
             "font-src 'self' data:",
             // Direct-to-storage spreadsheet uploads go to the Supabase Storage origin.
