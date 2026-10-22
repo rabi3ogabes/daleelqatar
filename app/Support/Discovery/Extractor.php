@@ -15,15 +15,18 @@ use Illuminate\Support\Str;
  *
  *  1. CSS selectors configured by an administrator for that site;
  *  2. schema.org JSON-LD (LocalBusiness / Organization and their subtypes);
- *  3. OpenGraph / <title> / <h1> — only to complete 1 or 2, never on their own,
- *     so listing pages and articles are not mistaken for companies.
+ *  3. the page itself, read like a person would (SmartReader): the block with
+ *     the company's name next to its phone / e-mail links — for directories
+ *     without structured data;
+ *  4. OpenGraph / <title> / <h1> — only to complete the above, never on their
+ *     own, so listing pages and articles are not mistaken for companies.
  *
  * The output is the raw shape RecordBuilder::build() expects. Ratings, review
  * counts and "verified" badges are never read.
  */
 final class Extractor
 {
-    public const FIELDS = ['name', 'name_ar', 'category', 'phone', 'email', 'website', 'address', 'city', 'latitude', 'longitude', 'hours', 'description', 'social'];
+    public const FIELDS = ['name', 'name_ar', 'category', 'phone', 'email', 'website', 'address', 'city', 'latitude', 'longitude', 'hours', 'description', 'social', 'logo', 'image'];
 
     private const MULTI = ['phone', 'email', 'social', 'category'];
 
@@ -54,18 +57,14 @@ final class Extractor
         $canonical = self::canonical($xpath, $url);
         $fromSelectors = self::fromSelectors($xpath, $selectors);
         $fromJsonLd = self::fromJsonLd($xpath, $canonical);
+        $fromPage = SmartReader::read($xpath, $canonical);
 
-        $method = match (true) {
-            $fromSelectors !== [] && $fromJsonLd !== [] => 'selectors+json-ld',
-            $fromSelectors !== [] => 'selectors',
-            $fromJsonLd !== [] => 'json-ld',
-            default => 'none',
-        };
-        if ($method === 'none') {
-            return ['raw' => null, 'method' => $method, 'record' => null];
+        $method = implode('+', array_keys(array_filter(['selectors' => $fromSelectors !== [], 'json-ld' => $fromJsonLd !== [], 'smart' => $fromPage !== []])));
+        if ($method === '') {
+            return ['raw' => null, 'method' => 'none', 'record' => null];
         }
 
-        $raw = array_replace($fromJsonLd, $fromSelectors);
+        $raw = array_replace($fromPage, $fromJsonLd, $fromSelectors);
         if (empty($raw['name']) && empty($raw['name_ar'])) {
             $raw['name'] = self::metaName($xpath);
         }
@@ -298,9 +297,7 @@ final class Extractor
 
     private static function meta(DOMXPath $xpath, string $name): string
     {
-        $node = $xpath->query('//meta[@property="'.$name.'" or @name="'.$name.'"]/@content')?->item(0);
-
-        return trim((string) $node?->nodeValue);
+        return SmartReader::meta($xpath, $name);
     }
 
     private static function metaName(DOMXPath $xpath): string

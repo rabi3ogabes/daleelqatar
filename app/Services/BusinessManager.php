@@ -198,6 +198,18 @@ class BusinessManager
         $this->audit->log('business.logo.updated', $business, metadata: $metadata);
     }
 
+    /** Stores ready PNG bytes (a processed logo) as the listing's logo. */
+    public function setLogoPng(Business $business, string $png, array $metadata = []): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'logo');
+        file_put_contents($path, $png);
+        try {
+            $this->setLogo($business, new UploadedFile($path, 'logo.png', 'image/png', null, true), $metadata);
+        } finally {
+            @unlink($path);
+        }
+    }
+
     public function setCover(Business $business, UploadedFile $file): void
     {
         $stored = $this->media->storeImage($file, "businesses/{$business->uuid}/cover", 2000, 1200);

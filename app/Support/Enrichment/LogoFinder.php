@@ -124,6 +124,24 @@ final class LogoFinder
     }
 
     /**
+     * A logo image found elsewhere (a directory listing): accepted only when it is
+     * large enough to look sharp and shaped like a mark, then tidied. PNG or null.
+     */
+    public static function accept(string $bytes): ?string
+    {
+        $info = @getimagesizefromstring($bytes);
+        if ($info === false) {
+            return null;
+        }
+        [$w, $h] = $info;
+        if (max($w, $h) < 96 || min($w, $h) < 24 || max($w, $h) / max(1, min($w, $h)) > 3.0) {
+            return null;
+        }
+
+        return self::process($bytes)['png'] ?? null;
+    }
+
+    /**
      * Trims empty margins, fits the artwork in a padded square and — when the
      * artwork is white or very light on a transparent background — places it on
      * the brand's navy so it stays visible on white cards. Returns PNG bytes.

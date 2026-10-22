@@ -6,10 +6,13 @@ namespace App\Support\Enrichment;
 
 use App\Models\Business;
 use App\Models\BusinessSuggestion;
+use App\Models\Category;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\BusinessManager;
 use App\Support\Directory;
+use App\Support\Discovery\DiscoveryException;
+use App\Support\Discovery\Fetcher;
 use App\Support\Import\Normalizer;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -45,8 +48,10 @@ final class SuggestionApplier
         foreach ($approved as $field => $edited) {
             $values[$field] = $this->clean($field, $edited ?? $suggestion->fields[$field]['value'], $suggestion->business_id);
         }
+        // A logo from another website is downloaded and checked before anything is saved.
+        $logo = isset($values['logo']) ? $this->logo($values['logo']) : null;
 
-        return DB::transaction(function () use ($suggestion, $values, $by) {
+        $suggestion = DB::transaction(function () use ($suggestion, $values, $by) {
             /** @var Business $business */
             $business = Business::query()->lockForUpdate()->findOrFail($suggestion->business_id);
             $original = $business->getAttributes();
@@ -57,6 +62,10 @@ final class SuggestionApplier
                     'website' => $business->forceFill(['website' => $value, 'website_status' => 'found']),
                     'location' => $business->forceFill(['latitude' => $value['lat'], 'longitude' => $value['lng'], 'geo_precision' => 'exact']),
                     'google_place' => $business->forceFill(['google_place_id' => $value['place_id'], 'google_maps_url' => $value['maps_url']]),
+                    'email' => $business->email = $value,
+                    'extra_phones' => $business->extra_phones = array_slice(array_values(array_unique([...(array) $business->extra_phones, ...$value])), 0, 10),
+                    'extra_emails' => $business->extra_emails = array_slice(array_values(array_unique([...(array) $business->extra_emails, ...$value])), 0, 10),
+                    'category' => $business->category_id = $value,
                     default => null,
                 };
             }
@@ -93,6 +102,29 @@ final class SuggestionApplier
 
             return $suggestion;
         });
+
+        if ($logo !== null) {
+            $business = Business::query()->findOrFail($suggestion->business_id);
+            $this->manager->setLogoPng($business, $logo['png'], ['origin' => 'directory', 'source_url' => $logo['url']]);
+        }
+
+        return $suggestion;
+    }
+
+    /** @return array{png: string, url: string} */
+    private function logo(string $url): array
+    {
+        try {
+            $image = (new Fetcher(0, 10))->get($url);
+            $png = LogoFinder::accept($image->body);
+        } catch (DiscoveryException) {
+            $png = null;
+        }
+        if ($png === null) {
+            throw ValidationException::withMessages(['fields.logo' => __('enrichment.errors.logo')]);
+        }
+
+        return ['png' => $png, 'url' => $image->url];
     }
 
     public function reject(BusinessSuggestion $suggestion, User $by): void
@@ -126,8 +158,28 @@ final class SuggestionApplier
             'opening_hours' => is_array($value) && is_array($value['days'] ?? null) ? ['days' => $value['days']] : $fail(),
             'services' => $this->services($value) ?: $fail('required'),
             'social' => $this->social($value) ?: $fail(),
+            'email' => ($e = $this->email($value)) !== null ? $e : $fail(),
+            'extra_emails' => $this->list($value, fn ($v) => $this->email($v)) ?: $fail(),
+            'extra_phones' => $this->list($value, fn ($v) => ($p = Normalizer::phone($v)) ? Normalizer::displayPhone($p) : null) ?: $fail(),
+            'category' => Category::query()->whereKey(is_array($value) ? ($value['id'] ?? null) : $value)->where('is_active', true)->value('id') ?? $fail(),
+            'logo' => ($url = safe_external_url(is_scalar($value) ? (string) $value : '')) !== null ? $url : $fail(),
             default => $fail(),
         };
+    }
+
+    private function email(mixed $value): ?string
+    {
+        $email = strtolower(trim(is_scalar($value) ? (string) $value : ''));
+
+        return $email !== '' && strlen($email) <= 190 && filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null;
+    }
+
+    /** A list typed as "a, b" or sent as an array, each item cleaned; invalid items are dropped. @return list<string> */
+    private function list(mixed $value, \Closure $clean): array
+    {
+        $items = is_array($value) ? $value : preg_split('/[,;\n]+/', is_scalar($value) ? (string) $value : '');
+
+        return array_slice(array_values(array_unique(array_filter(array_map(fn ($v) => is_scalar($v) ? $clean(trim((string) $v)) : null, $items ?: [])))), 0, 10);
     }
 
     private function location(mixed $value): ?array

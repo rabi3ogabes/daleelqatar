@@ -5,9 +5,14 @@ declare(strict_types=1);
 namespace App\Support\Enrichment;
 
 use App\Models\Business;
+use App\Models\BusinessSource;
 use App\Models\BusinessSuggestion;
+use App\Models\Category;
+use App\Models\ScrapeSource;
 use App\Support\Deadline;
 use App\Support\Discovery\DiscoveryException;
+use App\Support\Import\BusinessImporter;
+use App\Support\Import\CategoryMatcher;
 use App\Support\Import\Normalizer;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +31,8 @@ final class Enricher
         private readonly PlaceMatcher $matcher,
         private readonly WebsiteReader $reader,
         private readonly AiWriter $ai,
+        private readonly BusinessImporter $importer,
+        private readonly CategoryMatcher $categories,
     ) {}
 
     /**
@@ -98,6 +105,12 @@ final class Enricher
             }
         }
 
+        // 2b. No description from the website: what other directories said (kept privately when
+        //     their listing was imported) is rewritten in our own words — never published as is.
+        if ($options['ai'] && ! isset($fields['description_en']) && (blank($business->description_en) || blank($business->description_ar))) {
+            $this->fromSnapshots($business, $fields, $notes, $sources);
+        }
+
         // 3. A mobile number is often on WhatsApp — offered, clearly marked as unconfirmed.
         if (! isset($fields['whatsapp']) && blank($business->whatsapp)) {
             $phone = Normalizer::phone((string) ($fields['phone']['value'] ?? $business->phone));
@@ -120,6 +133,158 @@ final class Enricher
         }
 
         return $this->store($business, $fields, $match, array_values(array_unique($sources)), $notes, $websiteStatus);
+    }
+
+    private function fromSnapshots(Business $business, array &$fields, array &$notes, array &$sources): void
+    {
+        $snapshots = BusinessSource::query()->where('business_id', $business->id)->whereNotNull('details')->latest('last_seen_at')->limit(3)->get(['source', 'url', 'details']);
+        $pages = [];
+        $site = null;
+        foreach ($snapshots as $snapshot) {
+            $details = (array) $snapshot->details;
+            if (mb_strlen((string) ($details['description'] ?? '')) < 40) {
+                continue;
+            }
+            $pages[(string) ($snapshot->url ?: $snapshot->source)] = trim((! empty($details['categories']) ? 'Category: '.implode(', ', (array) $details['categories'])."\n" : '').$details['description']);
+            $site ??= Normalizer::domain((string) $snapshot->url) ?? $snapshot->source;
+        }
+        if ($pages === [] || ! $this->ai->available() || ! Deadline::has(20)) {
+            return;
+        }
+
+        try {
+            $profile = $this->ai->profileFromWebsite($business->name_en, $business->category?->name_en, $pages, 'directory');
+        } catch (EnrichmentException $e) {
+            $notes['ai'] = $e->getMessage();
+
+            return;
+        }
+        if (! $profile['found']) {
+            return;
+        }
+        foreach (['description_en', 'description_ar', 'tagline_en', 'tagline_ar'] as $key) {
+            if (blank($business->{$key}) && ! isset($fields[$key]) && filled($profile[$key])) {
+                $fields[$key] = $this->field($profile[$key], null, 'ai', 'medium', 'written_from_directory', ['site' => $site]);
+            }
+        }
+        if ($business->services->isEmpty() && ! isset($fields['services']) && $profile['services'] !== []) {
+            $fields['services'] = $this->field($profile['services'], null, 'ai', 'medium', 'written_from_directory', ['site' => $site]);
+        }
+        $sources[] = 'ai';
+    }
+
+    /**
+     * What another directory knows about this listing (a page found by DirectoryLookup), as a
+     * suggestion for review: its facts for the fields still empty, and — never its wording —
+     * a description the AI writes from those facts. Joins a suggestion already waiting for review.
+     *
+     * @param  array{url: string, title: string, score: float, record: array}  $match
+     */
+    public function fromDirectory(Business $business, ScrapeSource $source, array $match, bool $useAi = true): BusinessSuggestion
+    {
+        $business->loadMissing(['category', 'services', 'socialLinks']);
+        $record = $match['record'];
+        $confidence = $match['score'] >= 0.9 ? 'high' : 'medium';
+        $note = ['site' => $source->name];
+        $fields = [];
+        $notes = [];
+
+        $phones = array_values(array_unique(array_filter(array_map(fn ($p) => Normalizer::phone((string) $p), [$record['phone'] ?? null, ...($record['extra_phones'] ?? [])]))));
+        $known = array_filter(array_map(fn ($p) => Normalizer::phone((string) $p), [$business->phone, $business->whatsapp, ...(array) $business->extra_phones]));
+        if (blank($business->phone) && $phones !== []) {
+            $fields['phone'] = $this->field(Normalizer::displayPhone(array_shift($phones)), null, 'directory', $confidence, 'from_directory', $note);
+        }
+        $morePhones = array_values(array_diff($phones, $known, [Normalizer::phone((string) ($fields['phone']['value'] ?? ''))]));
+        if ($morePhones !== []) {
+            $fields['extra_phones'] = $this->field(array_map(fn ($p) => Normalizer::displayPhone($p), array_slice($morePhones, 0, 5)), $business->extra_phones ? implode(', ', (array) $business->extra_phones) : null, 'directory', $confidence, 'from_directory', $note);
+        }
+        if (blank($business->whatsapp) && ($wa = Normalizer::phone((string) ($record['whatsapp'] ?? ''))) !== null) {
+            $fields['whatsapp'] = $this->field(Normalizer::displayPhone($wa), null, 'directory', $confidence, 'from_directory', $note);
+        }
+
+        $emails = array_values(array_unique(array_map('strtolower', array_filter([$record['email'] ?? null, ...($record['extra_emails'] ?? [])]))));
+        $knownMail = array_map('strtolower', array_filter([$business->email, ...(array) $business->extra_emails]));
+        if (blank($business->email) && $emails !== []) {
+            $fields['email'] = $this->field(array_shift($emails), null, 'directory', $confidence, 'from_directory', $note);
+        }
+        $moreMail = array_values(array_diff($emails, $knownMail));
+        if ($moreMail !== []) {
+            $fields['extra_emails'] = $this->field(array_slice($moreMail, 0, 5), $business->extra_emails ? implode(', ', (array) $business->extra_emails) : null, 'directory', $confidence, 'from_directory', $note);
+        }
+
+        if (blank($business->website) && ($site = Normalizer::website((string) ($record['website'] ?? ''))) !== null && Normalizer::domain($site) !== null) {
+            $fields['website'] = $this->field($site, null, 'directory', $confidence, 'from_directory', $note);
+        }
+        if (blank($business->address_en) && filled($record['address'] ?? null)) {
+            $fields['address_en'] = $this->field(mb_substr((string) $record['address'], 0, 300), null, 'directory', $confidence, 'from_directory', $note);
+        }
+        // Placeholder pins (the same point for every company) were already dropped by the reader.
+        if (($record['latitude'] ?? null) !== null && ($business->latitude === null || $business->geo_precision !== 'exact')) {
+            $fields['location'] = $this->field(['lat' => round((float) $record['latitude'], 7), 'lng' => round((float) $record['longitude'], 7)],
+                $business->latitude !== null ? $business->latitude.', '.$business->longitude : null, 'directory', 'medium', 'from_directory', $note);
+        }
+        if ($business->socialLinks->isEmpty() && ($record['social'] ?? []) !== []) {
+            $fields['social'] = $this->field($record['social'], null, 'directory', $confidence, 'from_directory', $note);
+        }
+        if (blank($business->logo_path) && filled($record['logo_url'] ?? null)) {
+            $fields['logo'] = $this->field($record['logo_url'], null, 'directory', 'medium', 'logo_from_directory', $note);
+        }
+
+        // Their category, when ours is only the catch-all.
+        $labels = array_values(array_filter((array) ($record['categories'] ?? [])));
+        if ($labels !== [] && $this->categories->isFallback((int) $business->category_id)) {
+            $ids = $this->categories->match($labels, [], $business->name_en, ['name_ar' => $business->name_ar, 'description' => $record['description'] ?? null]);
+            if (! $this->categories->isFallback($ids[0]) && ($category = Category::query()->find($ids[0])) !== null) {
+                $fields['category'] = $this->field(['id' => $category->id, 'label' => $category->t('name')], $business->category?->t('name'), 'directory', 'medium', 'category_from_directory', $note + ['label' => implode(' · ', $labels)]);
+            }
+        }
+
+        // Their text only informs a description written in our own words.
+        $text = trim(implode("\n", array_filter([
+            $labels !== [] ? 'Category: '.implode(', ', $labels) : null,
+            $record['description'] ?? null,
+        ])));
+        $needsText = blank($business->description_en) || blank($business->description_ar) || blank($business->tagline_en) || $business->services->isEmpty();
+        if ($needsText && mb_strlen((string) ($record['description'] ?? '')) >= 40) {
+            if (! $useAi || ! $this->ai->available()) {
+                $notes['ai'] = 'ai_not_configured';
+            } else {
+                try {
+                    $profile = $this->ai->profileFromWebsite($business->name_en, $business->category?->name_en, [$match['url'] => $text], 'directory');
+                    if ($profile['found']) {
+                        foreach (['description_en', 'description_ar', 'tagline_en', 'tagline_ar'] as $key) {
+                            if (blank($business->{$key}) && filled($profile[$key])) {
+                                $fields[$key] = $this->field($profile[$key], null, 'ai', 'medium', 'written_from_directory', $note);
+                            }
+                        }
+                        if ($business->services->isEmpty() && $profile['services'] !== []) {
+                            $fields['services'] = $this->field($profile['services'], null, 'ai', 'medium', 'written_from_directory', $note);
+                        }
+                    }
+                } catch (EnrichmentException $e) {
+                    $notes['ai'] = $e->getMessage();
+                }
+            }
+        }
+
+        $notes['directory'] = array_filter([
+            'source' => $source->name,
+            'source_id' => $source->id,
+            'url' => $match['url'],
+            'title' => $match['title'],
+            'score' => $match['score'],
+            'chosen' => ! empty($match['chosen']),
+            'categories' => $labels,
+            'image' => $record['image_url'] ?? null,
+            'logo' => $record['logo_url'] ?? null,
+            'phones' => array_values(array_filter([$record['phone'] ?? null, ...($record['extra_phones'] ?? [])])),
+            'emails' => array_values(array_filter([$record['email'] ?? null, ...($record['extra_emails'] ?? [])])),
+            'address' => $record['address'] ?? $record['city'] ?? null,
+        ], fn ($v) => $v !== null && $v !== [] && $v !== '');
+
+        $this->importer->remember($business->id, $source->sourceKey(), $match['url'], $record);
+
+        return $this->store($business, $fields, null, array_values(array_unique(['directory', ...(isset($fields['description_en']) ? ['ai'] : [])])), $notes, $business->website_status, merge: true);
     }
 
     /**
@@ -322,9 +487,21 @@ final class Enricher
         }
     }
 
-    private function store(Business $business, array $fields, ?array $match, array $sources, array $notes, ?string $websiteStatus): BusinessSuggestion
+    private function store(Business $business, array $fields, ?array $match, array $sources, array $notes, ?string $websiteStatus, bool $merge = false): BusinessSuggestion
     {
-        return DB::transaction(function () use ($business, $fields, $match, $sources, $notes, $websiteStatus) {
+        return DB::transaction(function () use ($business, $fields, $match, $sources, $notes, $websiteStatus, $merge) {
+            // A partial check (one directory) adds to the suggestion already waiting, instead of replacing it.
+            $waiting = $merge ? BusinessSuggestion::query()->where('business_id', $business->id)->pending()->latest('id')->lockForUpdate()->first() : null;
+            if ($waiting !== null) {
+                $waiting->forceFill([
+                    'fields' => self::ordered((array) $waiting->fields + $fields),
+                    'sources' => array_values(array_unique([...(array) $waiting->sources, ...$sources])),
+                    'notes' => array_merge((array) $waiting->notes, $notes) ?: null,
+                ])->save();
+
+                return $waiting;
+            }
+
             BusinessSuggestion::query()->where('business_id', $business->id)->pending()->update(['status' => 'superseded', 'updated_at' => now()]);
 
             $suggestion = BusinessSuggestion::query()->create([
@@ -338,8 +515,11 @@ final class Enricher
             ]);
 
             // A check cut short by the request's time limit stays "not enriched", so the next run finishes it.
-            $cutShort = array_intersect(array_values($notes), ['out_of_time', 'ai_out_of_time', 'google_out_of_time']) !== [];
-            $business->forceFill(['enriched_at' => $cutShort ? $business->enriched_at : now(), 'website_status' => $websiteStatus])->saveQuietly();
+            // One directory looked up is not a full check: the listing stays due for one.
+            $cutShort = array_intersect(array_filter($notes, 'is_string'), ['out_of_time', 'ai_out_of_time', 'google_out_of_time']) !== [];
+            if (! $merge) {
+                $business->forceFill(['enriched_at' => $cutShort ? $business->enriched_at : now(), 'website_status' => $websiteStatus])->saveQuietly();
+            }
 
             return $suggestion;
         });
@@ -347,8 +527,8 @@ final class Enricher
 
     /** Display order on the review screen. */
     public const FIELD_ORDER = [
-        'name_ar', 'google_place', 'phone', 'whatsapp', 'website', 'social', 'address_en', 'address_ar', 'location',
-        'opening_hours', 'tagline_en', 'tagline_ar', 'description_en', 'description_ar', 'services',
+        'name_ar', 'google_place', 'category', 'logo', 'phone', 'extra_phones', 'whatsapp', 'email', 'extra_emails', 'website', 'social',
+        'address_en', 'address_ar', 'location', 'opening_hours', 'tagline_en', 'tagline_ar', 'description_en', 'description_ar', 'services',
     ];
 
     private static function ordered(array $fields): array

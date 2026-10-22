@@ -5,10 +5,16 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Business;
 use App\Models\ScrapeSource;
 use App\Services\AuditLogger;
+use App\Support\Deadline;
+use App\Support\Discovery\Discoverer;
 use App\Support\Discovery\DiscoveryException;
 use App\Support\Discovery\DiscoveryRunner;
+use App\Support\Discovery\Fetcher;
+use App\Support\Discovery\Presets;
+use App\Support\Discovery\SourceAnalyzer;
 use App\Support\Discovery\UrlGuard;
 use App\Support\Discovery\Urls;
 use Illuminate\Http\JsonResponse;
@@ -29,7 +35,7 @@ use Illuminate\View\View;
  */
 class DiscoveryController extends Controller
 {
-    public const MODES = ['sitemap', 'links', 'urls'];
+    public const MODES = ['sitemap', 'pages', 'links', 'urls'];
 
     public function __construct(private readonly DiscoveryRunner $runner, private readonly AuditLogger $audit) {}
 
@@ -40,15 +46,32 @@ class DiscoveryController extends Controller
             ->groupBy('scrape_source_id')
             ->map(fn ($rows) => $rows->pluck('total', 'status')->map(fn ($n) => (int) $n)->all());
 
+        // Companies each source added in the last 7 days.
+        $recent = DB::table('scrape_urls')->where('status', 'done')->where('message', 'like', 'created%')
+            ->where('fetched_at', '>=', now()->subDays(7))
+            ->selectRaw('scrape_source_id, count(*) as total')->groupBy('scrape_source_id')->pluck('total', 'scrape_source_id')
+            ->map(fn ($n) => (int) $n);
+
+        $sources = ScrapeSource::query()->orderByDesc('is_enabled')->orderBy('name')->get();
+
         return view('admin.discovery.index', [
-            'sources' => ScrapeSource::query()->orderByDesc('is_enabled')->orderBy('name')->get(),
+            'sources' => $sources,
             'counts' => $counts,
+            'recent' => $recent,
+            'presets' => array_filter(Presets::ALL, fn ($p) => ! $sources->contains(fn ($s) => UrlGuard::sameSite($s->base_url, $p['base_url']))),
         ]);
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
-        return view('admin.discovery.form', ['source' => new ScrapeSource(['discovery' => 'sitemap', 'is_enabled' => true])]);
+        $preset = Presets::get($request->query('preset'));
+        $source = new ScrapeSource(['discovery' => 'sitemap', 'is_enabled' => true]);
+        if ($preset !== null) {
+            $source->fill(Arr::except($preset, ['settings']));
+            $source->settings = $preset['settings'];
+        }
+
+        return view('admin.discovery.form', ['source' => $source, 'preset' => $preset !== null]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -92,11 +115,35 @@ class DiscoveryController extends Controller
         return redirect()->route('admin.discovery.index')->with('success', __('discovery.deleted'));
     }
 
-    /** Runs one short crawl now (about 20 seconds) and reports what it found. */
-    public function run(ScrapeSource $source): RedirectResponse
+    /**
+     * Runs one short crawl now (about 20 seconds) and reports what it found. The live runner on the
+     * sources page calls it as JSON again and again while there is work left.
+     */
+    public function run(Request $request, ScrapeSource $source): RedirectResponse|JsonResponse
     {
         @set_time_limit(60);
-        $result = $this->runner->run($source, 20.0);
+        Deadline::start(50);
+        $result = $this->runner->run($source, $request->wantsJson() ? 30.0 : 20.0);
+
+        if ($request->wantsJson()) {
+            $source->refresh();
+            $pending = $source->urls()->where('status', 'pending')->count();
+            $listing = ! empty(((array) $source->stats)['frontier']);
+
+            return response()->json([
+                'status' => $result['status'] === 'ok' || $result['status'] === 'busy' ? $result['status'] : 'error',
+                'message' => match (true) {
+                    $result['status'] === 'busy' => __('discovery.busy'),
+                    $result['status'] !== 'ok' => __('discovery.run_failed'),
+                    default => null,
+                },
+                'run' => Arr::only($result, DiscoveryRunner::COUNTERS),
+                'pending' => $pending,
+                'listing' => $listing,
+                'more' => $result['status'] !== 'busy' && ($pending > 0 || $listing),
+                'total_created' => (int) (((array) $source->stats)['created'] ?? 0),
+            ], $result['status'] === 'ok' || $result['status'] === 'busy' ? 200 : 500);
+        }
 
         if ($result['status'] === 'busy') {
             return back()->with('warning', __('discovery.busy'));
@@ -109,6 +156,57 @@ class DiscoveryController extends Controller
             'discovered' => $result['discovered'], 'processed' => $result['processed'],
             'created' => $result['created'], 'merged' => $result['merged'],
         ]));
+    }
+
+    /** Works out the method, start address and company-page pattern from a website address. */
+    public function analyze(Request $request): JsonResponse
+    {
+        $data = $request->validate(['url' => ['required', 'url:http,https', 'max:300']]);
+        @set_time_limit(60);
+        Deadline::start(45);
+
+        try {
+            UrlGuard::check($data['url']);
+            $result = (new SourceAnalyzer(new Fetcher(800, 10)))->analyze($data['url']);
+        } catch (DiscoveryException $e) {
+            return response()->json(['ok' => false, 'message' => self::reason($e->getMessage())], 422);
+        } finally {
+            Deadline::clear();
+        }
+
+        return response()->json([
+            'ok' => $result['mode'] !== null,
+            'message' => $result['mode'] === null ? __('discovery.analyze_none') : null,
+            'base_url' => $result['base_url'],
+            'mode' => $result['mode'],
+            'mode_label' => $result['mode'] ? __('discovery.modes.'.$result['mode']) : null,
+            'start_urls' => implode("\n", $result['start_urls']),
+            'url_pattern' => $result['url_pattern'],
+            'last_page' => $result['last_page'],
+            'detail_count' => $result['detail_count'],
+            'steps' => array_map(fn ($step) => ['label' => __('discovery.analyze_steps.'.$step['key']), 'ok' => $step['ok'], 'detail' => $step['detail'] ?? null], $result['steps']),
+            'sample' => $result['sample'],
+        ]);
+    }
+
+    /** The companies a source added to the directory, newest first. */
+    public function newCompanies(Request $request, ScrapeSource $source): View
+    {
+        $days = in_array((int) $request->query('days'), [1, 7, 30, 90], true) ? (int) $request->query('days') : 30;
+        $since = now()->subDays($days);
+
+        $urls = $source->urls()->where('status', 'done')->where('message', 'like', 'created%')->whereNotNull('business_id')
+            ->where('fetched_at', '>=', $since)->orderByDesc('fetched_at')->paginate(25)->withQueryString();
+        $businesses = Business::withTrashed()->with(['category', 'municipality', 'area'])->whereIn('id', $urls->pluck('business_id'))->get()->keyBy('id');
+
+        return view('admin.discovery.new', [
+            'source' => $source,
+            'urls' => $urls,
+            'businesses' => $businesses,
+            'days' => $days,
+            'waiting' => $source->urls()->where('status', 'pending')->count(),
+            'completed' => $source->urls()->where('status', 'done')->where('message', 'like', 'merged%')->where('fetched_at', '>=', $since)->count(),
+        ]);
     }
 
     /** Shows what the crawler would read from one page (nothing is saved). */
@@ -148,6 +246,8 @@ class DiscoveryController extends Controller
                 'coordinates' => $record['latitude'] !== null ? $record['latitude'].', '.$record['longitude'] : null,
                 'hours' => $record['hours'],
                 'description' => $record['description'] ? Str::limit($record['description'], 300) : null,
+                'logo' => $record['logo_url'] ?? null,
+                'image' => $record['image_url'] ?? null,
             ], fn ($v) => $v !== null && $v !== ''),
         ]);
     }
@@ -172,13 +272,19 @@ class DiscoveryController extends Controller
                 }
             }],
             'discovery' => ['required', Rule::in(self::MODES)],
-            'start_urls' => [Rule::requiredIf(fn () => $request->input('discovery') === 'urls'), 'nullable', 'string', 'max:20000'],
-            'url_pattern' => [Rule::requiredIf(fn () => $request->input('discovery') === 'links'), 'nullable', 'string', 'max:500', function ($attr, $value, $fail) {
+            'start_urls' => [Rule::requiredIf(fn () => in_array($request->input('discovery'), ['urls', 'pages'], true)), 'nullable', 'string', 'max:20000'],
+            'url_pattern' => [Rule::requiredIf(fn () => in_array($request->input('discovery'), ['links', 'pages'], true)), 'nullable', 'string', 'max:500', function ($attr, $value, $fail) {
                 if (Urls::pattern($value) === null) {
                     $fail(__('discovery.errors.pattern'));
                 }
             }],
             'selectors' => ['nullable', 'string', 'max:5000'],
+            'search_url' => ['nullable', 'string', 'max:500', function ($attr, $value, $fail) use ($request) {
+                $url = Urls::normalize(str_replace('{query}', 'test', (string) $value));
+                if (! str_contains((string) $value, '{query}') || $url === null || ! UrlGuard::sameSite($url, (string) $request->input('base_url'))) {
+                    $fail(__('discovery.errors.search_url'));
+                }
+            }],
             'delay_ms' => ['required', 'integer', 'min:1000', 'max:60000'],
             'max_pages_per_run' => ['required', 'integer', 'min:1', 'max:200'],
             'rediscover_hours' => ['required', 'integer', 'min:1', 'max:720'],
@@ -193,9 +299,18 @@ class DiscoveryController extends Controller
             if ($line === '') {
                 continue;
             }
-            $url = Urls::normalize($line);
-            if ($url === null || ! UrlGuard::sameSite($url, $data['base_url'])) {
-                throw ValidationException::withMessages(['start_urls' => __('discovery.errors.start_urls')]);
+            if ($data['discovery'] === 'pages') {
+                // A template: "{page}" is kept as typed and replaced by 1, 2, 3… when crawling.
+                $url = str_contains($line, '{page}') ? Urls::normalize(Discoverer::pageUrl($line, 987654321)) : null;
+                $url = $url !== null ? str_replace('987654321', '{page}', $url) : null;
+                if ($url === null || ! UrlGuard::sameSite(Discoverer::pageUrl($url, 1), $data['base_url'])) {
+                    throw ValidationException::withMessages(['start_urls' => __('discovery.errors.page_template')]);
+                }
+            } else {
+                $url = Urls::normalize($line);
+                if ($url === null || ! UrlGuard::sameSite($url, $data['base_url'])) {
+                    throw ValidationException::withMessages(['start_urls' => __('discovery.errors.start_urls')]);
+                }
             }
             $starts[] = $url;
         }
@@ -212,6 +327,7 @@ class DiscoveryController extends Controller
                 'max_pages_per_run' => (int) $data['max_pages_per_run'],
                 'rediscover_hours' => (int) $data['rediscover_hours'],
                 'publish' => $request->boolean('publish'),
+                'search_url' => ($data['search_url'] ?? null) ?: null,
             ]),
             'is_enabled' => $request->boolean('is_enabled'),
         ];

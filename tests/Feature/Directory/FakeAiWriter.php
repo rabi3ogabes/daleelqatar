@@ -10,6 +10,9 @@ class FakeAiWriter implements AiWriter
     /** @var array<string, array{category: string, confidence: int}> business name => verdict */
     public static array $categories = [];
 
+    /** @var list<array{origin: string, text: string}> what the profile writer was given */
+    public static array $profiles = [];
+
     public function available(): bool
     {
         return true;
@@ -22,8 +25,20 @@ class FakeAiWriter implements AiWriter
         return collect($businesses)->mapWithKeys(fn ($b) => [$b['id'] => $known[$b['name']] ?? 'شركة'])->all();
     }
 
-    public function profileFromWebsite(string $name, ?string $category, array $pages): array
+    public function profileFromWebsite(string $name, ?string $category, array $pages, string $origin = 'website'): array
     {
+        self::$profiles[] = ['origin' => $origin, 'text' => implode("\n", $pages)];
+        if ($origin === 'directory') {
+            return [
+                'found' => true,
+                'description_en' => 'Supplier of building materials and construction tools in Doha.',
+                'description_ar' => 'مورّد لمواد البناء وأدوات الإنشاء في الدوحة.',
+                'tagline_en' => '',
+                'tagline_ar' => '',
+                'services' => [],
+            ];
+        }
+
         return [
             'found' => str_contains(implode(' ', $pages), 'majlis'),
             'description_en' => 'Furniture showroom in Najma, Doha, supplying majlis seating, bedrooms and office furniture.',

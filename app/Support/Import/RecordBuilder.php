@@ -107,6 +107,12 @@ final class RecordBuilder
             $address = trim(($address ? $address.', ' : '').'P.O. Box '.$poBox);
         }
         $address = $address !== null ? Str::limit($address, 300, '') : null;
+        // "Doha, Qatar" alone is a city, not an address.
+        $city = Normalizer::text($raw['city'] ?? '', 120);
+        if (Placeholders::isGenericAddress($address)) {
+            $city ??= Placeholders::cityOf($address);
+            $address = null;
+        }
 
         $categories = self::splitList((string) ($raw['category'] ?? ''), '/\s*(?:·|;|\||\n)\s*/u');
         $tags = self::splitList((string) ($raw['tags'] ?? ''), '/\s*(?:·|;|,|\||\n)\s*/u', 20);
@@ -124,7 +130,7 @@ final class RecordBuilder
             'website' => $website,
             'social' => $social,
             'address' => $address,
-            'city' => Normalizer::text($raw['city'] ?? '', 120),
+            'city' => $city,
             'latitude' => $lat,
             'longitude' => $lng,
             'precision' => $precision,
@@ -132,7 +138,16 @@ final class RecordBuilder
             'description' => self::description((string) ($raw['description'] ?? '')),
             'external_id' => Normalizer::text($raw['external_id'] ?? '', 191),
             'source_url' => Normalizer::website($raw['source_url'] ?? '') ? Str::limit((string) $raw['source_url'], 500, '') : null,
+            'logo_url' => self::imageUrl($raw['logo'] ?? null),
+            'image_url' => self::imageUrl($raw['image'] ?? null),
         ];
+    }
+
+    private static function imageUrl(?string $url): ?string
+    {
+        $url = trim((string) $url);
+
+        return preg_match('#^https?://[^\s]+$#i', $url) && strlen($url) <= 1000 ? $url : null;
     }
 
     /** @return array{0: ?string, 1: ?string} [English name, Arabic name] */
@@ -165,7 +180,7 @@ final class RecordBuilder
     {
         $lat = is_numeric(trim((string) $lat)) ? (float) $lat : null;
         $lng = is_numeric(trim((string) $lng)) ? (float) $lng : null;
-        if ($lat === null || $lng === null
+        if ($lat === null || $lng === null || Placeholders::isCoordinate($lat, $lng)
             || $lat < self::QATAR['lat'][0] || $lat > self::QATAR['lat'][1]
             || $lng < self::QATAR['lng'][0] || $lng > self::QATAR['lng'][1]) {
             return [null, null, null];

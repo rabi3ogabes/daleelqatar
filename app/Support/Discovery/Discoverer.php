@@ -47,14 +47,26 @@ final class Discoverer
         $maxDepth = (int) $source->setting('max_depth', 2);
         $maxListPages = (int) $source->setting('max_list_pages', 200);
 
-        while ($frontier !== [] && $hasTime($this->fetcher->waitFor($frontier[0][0]))) {
-            [$url, $depth, $kind] = array_shift($frontier);
+        while ($frontier !== [] && $hasTime($this->fetcher->waitFor(self::target($frontier[0])))) {
+            $item = array_shift($frontier);
+            [, $depth, $kind] = $item;
+            $url = self::target($item);
             $visited[substr(sha1($url), 0, 12)] = true;
 
             try {
                 $page = $this->fetcher->get($url, $source->base_url);
-            } catch (DiscoveryException) {
+            } catch (DiscoveryException $e) {
                 $errors++;
+                // A numbered listing page that failed is tried again on the next run, once.
+                if ($kind === 'pages' && $e->retryable && empty($item[4])) {
+                    $frontier[] = [$item[0], $depth, 'pages', $item[3] ?? null, 1];
+                }
+
+                continue;
+            }
+
+            if ($kind === 'pages') {
+                $frontier = $this->listingPage($source, $page, $item, $frontier, $pattern, $queued);
 
                 continue;
             }
@@ -93,6 +105,72 @@ final class Discoverer
         return ['queued' => $queued, 'complete' => $complete, 'errors' => $errors];
     }
 
+    /**
+     * The URL a frontier item stands for. Numbered listings ("pages" mode) keep their
+     * template ("…/listings?page={page}") and the page number in the depth slot.
+     */
+    private static function target(array $item): string
+    {
+        return ($item[2] ?? null) === 'pages' ? self::pageUrl($item[0], (int) $item[1]) : $item[0];
+    }
+
+    public static function pageUrl(string $template, int $page): string
+    {
+        return str_replace('{page}', (string) max(1, $page), $template);
+    }
+
+    /**
+     * One numbered listing page: queue its company links, then move on to the next number
+     * until the list ends — an empty page, a page repeating the previous one, the last page
+     * number the site links to, or the configured maximum.
+     */
+    private function listingPage(ScrapeSource $source, FetchResult $page, array $item, array $frontier, ?string $pattern, int &$queued): array
+    {
+        [$template, $number] = [$item[0], (int) $item[1]];
+
+        $details = [];
+        $last = 0;
+        $numbered = self::numberPattern($template);
+        foreach (self::links($page->body, $page->url) as $link) {
+            if (! UrlGuard::sameSite($link, $source->base_url)) {
+                continue;
+            }
+            if ($pattern !== null ? preg_match($pattern, $link) : false) {
+                $details[] = $link;
+            } elseif ($numbered !== null && preg_match($numbered, $link, $m)) {
+                $last = max($last, (int) $m[1]);
+            }
+        }
+        $details = array_values(array_unique($details));
+        $queued += $this->enqueue($source, $details);
+
+        sort($details);
+        $signature = $details === [] ? null : substr(sha1(implode('|', $details)), 0, 16);
+        $limit = (int) $source->setting('max_list_pages', 1000);
+        $ended = $signature === null               // nothing listed: past the end
+            || $signature === ($item[3] ?? null)    // the site repeats its last page for any number
+            || ($last > 0 && $number >= $last)      // the pager links to no higher page
+            || $number >= $limit;
+
+        if (! $ended) {
+            $frontier[] = [$template, $number + 1, 'pages', $signature];
+        }
+
+        return $frontier;
+    }
+
+    /** "https://site/listings?page={page}" → a regex that captures the page number of links built the same way. */
+    private static function numberPattern(string $template): ?string
+    {
+        $normalized = Urls::normalize(str_replace('{page}', '987654321', $template));
+        if ($normalized === null) {
+            return null;
+        }
+        $parts = explode('987654321', $normalized, 2);
+
+        return count($parts) === 2 ? '#^'.preg_quote($parts[0], '#').'(\d+)'.preg_quote($parts[1], '#').'$#i' : null;
+    }
+
     /** @return list<array{0: string, 1: int, 2: string}> */
     private function seed(ScrapeSource $source): array
     {
@@ -104,6 +182,11 @@ final class Discoverer
                 fn ($u) => $u !== null && UrlGuard::sameSite($u, $source->base_url),
             ));
             $starts = $starts ?: [rtrim(Fetcher::origin($source->base_url), '/').'/sitemap.xml'];
+        }
+        if ($source->discovery === 'pages') {
+            $templates = array_values(array_filter($source->startUrls(), fn ($u) => str_contains($u, '{page}') && Urls::normalize(self::pageUrl($u, 1)) !== null));
+
+            return array_map(fn ($t) => [$t, max(1, (int) $source->setting('first_page', 1)), 'pages', null], $templates);
         }
         if ($starts === []) {
             $starts = [Urls::normalize($source->base_url) ?? $source->base_url];
