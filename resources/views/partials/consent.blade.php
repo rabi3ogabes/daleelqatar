@@ -7,7 +7,7 @@
         <span class="hidden size-11 shrink-0 items-center justify-center rounded-xl bg-navy-900 text-gold-300 sm:flex"><x-icon name="shield-check" class="size-5" /></span>
         <p class="flex-1 text-sm leading-relaxed text-navy-800">
             {{ __('directory.consent.text') }}
-            <a href="{{ route('cookies') }}" class="font-semibold text-gold-700 underline-offset-2 hover:underline">{{ __('directory.consent.policy') }}</a>
+            <a href="{{ route('cookies') }}" class="font-semibold text-gold-700 underline-offset-2 hover:underline">{{ __('nav.cookies') }}</a>
         </p>
         <div class="flex shrink-0 gap-2">
             <button type="button" class="btn btn-ghost btn-sm" @click="choose('denied')">{{ __('directory.consent.decline') }}</button>
