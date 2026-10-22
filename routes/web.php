@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CronController;
+use App\Http\Controllers\QrController;
 use App\Http\Controllers\SeoController;
 use App\Http\Controllers\VisitController;
 use App\Http\Middleware\EnsureAccountIsActive;
@@ -28,7 +29,10 @@ Route::withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, Va
     ->middleware('throttle:pageviews')->group(function () {
         Route::post('/t/view', [VisitController::class, 'view'])->name('visits.view');
         Route::post('/t/ping', [VisitController::class, 'ping'])->name('visits.ping');
+        Route::post('/t/impressions', [VisitController::class, 'impressions'])->name('visits.impressions');
     });
+// Printed QR codes open this short address: the scan is counted, then the listing opens.
+Route::get('/qr/{slug}', [QrController::class, 'scan'])->where('slug', '[A-Za-z0-9\-_]+')->middleware('throttle:60,1')->name('qr.scan');
 Route::get('/cron/maintenance', [CronController::class, 'maintenance'])
     ->middleware('throttle:10,1')
     ->name('cron.maintenance');

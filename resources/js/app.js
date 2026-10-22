@@ -210,6 +210,19 @@ if (viewBeacon) beacon(viewBeacon.dataset.viewBeacon);
         });
     };
 
+    // Listings shown on this page ("search appearances" in the owner's insights), reported once each list is seen.
+    const lists = document.querySelectorAll('[data-impressions]');
+    if (lists.length && html.dataset.impressionsUrl && 'IntersectionObserver' in window) {
+        const seen = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (!entry.isIntersecting) return;
+                seen.unobserve(entry.target);
+                if (entry.target.dataset.impressions) send(html.dataset.impressionsUrl, { l: entry.target.dataset.impressions }, true);
+            });
+        });
+        lists.forEach((el) => seen.observe(el));
+    }
+
     send(html.dataset.track, {
         k: key || null,
         g: html.dataset.pageSig || null,
@@ -373,6 +386,9 @@ Alpine.data('imagePicker', (existing = null) => ({
 /* Opening-hours editor -------------------------------------------------------- */
 Alpine.data('hoursEditor', (initial) => ({
     days: initial,
+    load(rows) {
+        this.days = JSON.parse(JSON.stringify(rows));
+    },
     copyToAll(from) {
         const src = JSON.parse(JSON.stringify(this.days[from]));
         this.days = this.days.map((d) => ({ ...JSON.parse(JSON.stringify(src)), day: d.day, label: d.label }));
@@ -964,6 +980,157 @@ Alpine.data('logoStudio', (cfg) => ({
             this.error = err.message || this.cfg.i18n.failed;
             this.saving = false;
         }
+    },
+}));
+
+
+/* Quote request form: live recipient count, area picker, and a draft kept on this device ---------- */
+Alpine.data('quoteForm', (state, areas) => ({
+    ...state,
+    areas,
+    count: null,
+    nearby: 0,
+    verified: 0,
+    loading: false,
+    detailsLength: 0,
+    timer: null,
+    draftKey: 'dq_quote_draft',
+    get areaList() {
+        return this.areas.filter((a) => String(a.m) === this.municipality);
+    },
+    init() {
+        if (this.restore) this.restoreDraft();
+        this.detailsLength = (this.$refs.form.querySelector('[name=details]')?.value || '').length;
+        this.refresh();
+    },
+    areaChanged() {
+        if (!this.areaList.some((a) => String(a.id) === this.area)) this.area = '';
+    },
+    refresh() {
+        clearTimeout(this.timer);
+        if (!this.category) {
+            this.count = null;
+            return;
+        }
+        this.loading = true;
+        this.timer = setTimeout(async () => {
+            const params = new URLSearchParams({ category_id: this.category, municipality_id: this.municipality || '', area_id: this.area || '' });
+            if (this.business) params.set('business', this.business);
+            try {
+                const r = await fetch(`${this.previewUrl}?${params}`, { headers: { Accept: 'application/json' } });
+                const data = r.ok ? await r.json() : { count: null };
+                this.count = data.count;
+                this.nearby = data.nearby ?? 0;
+                this.verified = data.verified ?? 0;
+            } catch {
+                this.count = null;
+            } finally {
+                this.loading = false;
+            }
+        }, 250);
+    },
+    fields() {
+        const out = {};
+        new FormData(this.$refs.form).forEach((v, k) => {
+            if (!['_token', 'website', 'consent'].includes(k)) out[k] = v;
+        });
+        return out;
+    },
+    save() {
+        try {
+            localStorage.setItem(this.draftKey, JSON.stringify({ at: Date.now(), fields: this.fields() }));
+        } catch {}
+    },
+    restoreDraft() {
+        let draft = null;
+        try {
+            draft = JSON.parse(localStorage.getItem(this.draftKey) || 'null');
+        } catch {}
+        // Drafts older than a week are dropped.
+        if (!draft || Date.now() - draft.at > 7 * 864e5) return;
+        const f = draft.fields || {};
+        const form = this.$refs.form;
+        if (form.querySelector('[name=title]').value || form.querySelector('[name=details]').value) return;
+        if (f.category_id && !this.category) this.category = f.category_id;
+        if (f.municipality_id && !this.municipality) this.municipality = f.municipality_id;
+        if (f.area_id && !this.area) this.$nextTick(() => (this.area = f.area_id));
+        if (f.contact_method) this.contact = f.contact_method;
+        ['title', 'details', 'contact_phone'].forEach((k) => {
+            const el = form.querySelector(`[name=${k}]`);
+            if (el && f[k] && !el.value) el.value = f[k];
+        });
+        if (f.timing) {
+            const t = form.querySelector(`[name=timing][value="${f.timing}"]`);
+            if (t) t.checked = true;
+        }
+    },
+    submit(e) {
+        this.save();
+        if (this.guest) {
+            e.preventDefault();
+            window.location.href = this.loginUrl;
+            return;
+        }
+    },
+}));
+
+/** Forgets the quote draft once the request was accepted. */
+window.dqForgetQuoteDraft = () => {
+    try {
+        localStorage.removeItem('dq_quote_draft');
+    } catch {}
+};
+
+/* Guide editor (admin): live count of qualifying listings, and the editor's pinned picks ---------- */
+Alpine.data('guideEditor', (state, areas) => ({
+    ...state,
+    areas,
+    count: 0,
+    min: 3,
+    items: [],
+    loading: false,
+    timer: null,
+    get areaList() {
+        return this.areas.filter((a) => String(a.m) === this.municipality);
+    },
+    init() {
+        this.refresh();
+    },
+    areaChanged() {
+        if (!this.areaList.some((a) => String(a.id) === this.area)) this.area = '';
+    },
+    isPinned(id) {
+        return this.pinned.some((p) => p.id === id);
+    },
+    pinIndex(id) {
+        return this.pinned.findIndex((p) => p.id === id);
+    },
+    toggle(item) {
+        this.pinned = this.isPinned(item.id) ? this.pinned.filter((p) => p.id !== item.id) : [...this.pinned, { id: item.id, name: item.name }];
+    },
+    refresh() {
+        clearTimeout(this.timer);
+        this.loading = true;
+        this.timer = setTimeout(async () => {
+            const params = new URLSearchParams({
+                category_id: this.category || '',
+                municipality_id: this.municipality || '',
+                area_id: this.area || '',
+                open_24h: this.open24 ? 1 : 0,
+                verified_only: this.verified ? 1 : 0,
+            });
+            try {
+                const r = await fetch(`${this.previewUrl}?${params}`, { headers: { Accept: 'application/json' } });
+                const data = r.ok ? await r.json() : null;
+                if (data) {
+                    this.count = data.count;
+                    this.min = data.min;
+                    this.items = data.items;
+                }
+            } finally {
+                this.loading = false;
+            }
+        }, 250);
     },
 }));
 

@@ -66,7 +66,11 @@
                     @else
                         <p class="py-6 text-center text-sm text-muted-strong">{{ __('dashboard.no_data') }}</p>
                     @endif
-                    <div class="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                    <a href="{{ route('account.businesses.insights', $business->uuid) }}" class="mt-6 flex items-center justify-between gap-3 rounded-xl border border-gold-200 bg-gold-50/60 px-4 py-3 text-sm font-semibold text-navy-900 transition hover:bg-gold-50">
+                        <span class="flex items-center gap-2"><x-icon name="chart-line" class="size-4 text-gold-700" />{{ __('insights.full_cta') }}</span>
+                        <x-icon name="chevron-right" class="size-4 text-gold-700 rtl:rotate-180" />
+                    </a>
+                    <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
                         @foreach($interactions as $type => $count)
                             <div class="flex items-center gap-2 rounded-xl bg-navy-50/70 px-3 py-2">
                                 <x-icon :name="$eventIcons[$type] ?? 'activity'" class="size-4 text-gold-700" />
@@ -134,6 +138,16 @@
             </section>
 
             @if($business->isPublished())
+                <a href="{{ route('account.businesses.poster', $business->uuid) }}" class="card card-hover flex items-center gap-3 p-4">
+                    <span class="flex size-10 items-center justify-center rounded-xl bg-navy-900 text-gold-300"><x-icon name="qr-code" class="size-5" /></span>
+                    <span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-navy-900">{{ __('poster.card_title') }}</span><span class="block text-xs text-muted-strong">{{ __('poster.card_short') }}</span></span>
+                    <x-icon name="chevron-right" class="size-4 text-muted rtl:rotate-180" />
+                </a>
+                <a href="{{ route('account.businesses.special-hours', $business->uuid) }}" class="card card-hover flex items-center gap-3 p-4">
+                    <span class="flex size-10 items-center justify-center rounded-xl bg-gold-50 text-gold-700"><x-icon name="moon" class="size-5" /></span>
+                    <span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-navy-900">{{ __('seasons.owner.card_title') }}</span><span class="block text-xs text-muted-strong">{{ __('seasons.owner.card_text') }}</span></span>
+                    <x-icon name="chevron-right" class="size-4 text-muted rtl:rotate-180" />
+                </a>
                 <a href="{{ route('account.offers.create', ['business' => $business->uuid]) }}" class="card card-hover flex items-center gap-3 p-4">
                     <span class="flex size-10 items-center justify-center rounded-xl bg-gold-50 text-gold-700"><x-icon name="tag" class="size-5" /></span>
                     <span class="flex-1 text-sm font-semibold text-navy-900">{{ __('account.offers.create') }}</span>

@@ -6,11 +6,13 @@ use App\Http\Controllers\Web\CategoryController;
 use App\Http\Controllers\Web\ClaimController;
 use App\Http\Controllers\Web\ContactController;
 use App\Http\Controllers\Web\FavoriteController;
+use App\Http\Controllers\Web\GuideController;
 use App\Http\Controllers\Web\HomeController;
 use App\Http\Controllers\Web\LocationController;
 use App\Http\Controllers\Web\MapController;
 use App\Http\Controllers\Web\OfferController;
 use App\Http\Controllers\Web\PageController;
+use App\Http\Controllers\Web\QuoteController;
 use App\Http\Controllers\Web\ReportController;
 use App\Http\Controllers\Web\ReviewController;
 use App\Http\Controllers\Web\SearchController;
@@ -50,6 +52,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/business/{business:slug}/claim', [ClaimController::class, 'create'])->name('business.claim');
     Route::post('/business/{business:slug}/claim', [ClaimController::class, 'store'])->middleware(['throttle:submissions'])->name('business.claim.store');
 });
+
+// Quote requests: anyone can open the form; sending needs a verified account (replies arrive there).
+Route::get('/quotes/new', [QuoteController::class, 'create'])->name('quotes.create');
+Route::get('/quotes/preview', [QuoteController::class, 'preview'])->middleware('throttle:60,1')->name('quotes.preview');
+Route::post('/quotes', [QuoteController::class, 'store'])->middleware(['auth', 'verified', 'throttle:submissions'])->name('quotes.store');
+
+Route::get('/guides', [GuideController::class, 'index'])->name('guides.index');
+Route::get('/guides/{guide:slug}', [GuideController::class, 'show'])->name('guides.show');
 
 Route::get('/offers', [OfferController::class, 'index'])->name('offers.index');
 Route::get('/offers/{offer:slug}', [OfferController::class, 'show'])->name('offers.show');

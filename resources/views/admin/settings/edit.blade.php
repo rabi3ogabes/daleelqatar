@@ -4,7 +4,7 @@
         <nav class="flex gap-1 overflow-x-auto scrollbar-none xl:flex-col" aria-label="{{ __('admin.settings.title') }}">
             @foreach($groups as $g)
                 <a href="{{ route('admin.settings.edit', $g) }}" @class(['flex shrink-0 items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm font-medium transition', 'bg-navy-900 text-white' => $g === $group, 'text-navy-700 hover:bg-white' => $g !== $group]) @if($g === $group) aria-current="page" @endif>
-                    <x-icon :name="['brand' => 'sparkles', 'home' => 'house', 'contact' => 'phone', 'moderation' => 'shield-check', 'uploads' => 'upload', 'notifications' => 'bell', 'seo' => 'search', 'integrations' => 'chart-line'][$g] ?? 'settings'" class="size-4 {{ $g === $group ? 'text-gold-300' : 'text-muted' }}" />
+                    <x-icon :name="['brand' => 'sparkles', 'home' => 'house', 'contact' => 'phone', 'moderation' => 'shield-check', 'uploads' => 'upload', 'notifications' => 'bell', 'seo' => 'search', 'integrations' => 'chart-line', 'growth' => 'message-square-quote'][$g] ?? 'settings'" class="size-4 {{ $g === $group ? 'text-gold-300' : 'text-muted' }}" />
                     {{ __('admin.settings.groups.'.$g) }}
                 </a>
             @endforeach

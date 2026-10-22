@@ -13,12 +13,15 @@ use App\Models\BusinessVerificationRequest;
 use App\Models\Category;
 use App\Models\ContactMessage;
 use App\Models\Faq;
+use App\Models\Guide;
 use App\Models\ListingReport;
 use App\Models\Municipality;
 use App\Models\Offer;
 use App\Models\Page;
+use App\Models\QuoteRequest;
 use App\Models\Review;
 use App\Models\ReviewReport;
+use App\Models\SeasonalPeriod;
 use App\Models\SiteSetting;
 use App\Models\User;
 use App\Policies\BusinessPolicy;
@@ -31,7 +34,9 @@ use App\Support\Enrichment\ClaudeAiWriter;
 use App\Support\Enrichment\NullAiWriter;
 use App\Support\Localization;
 use App\Support\Permissions;
+use App\Support\Search\ClaudeSearchInterpreter;
 use App\Support\Search\PostgresBusinessSearch;
+use App\Support\Search\SearchInterpreter;
 use App\Support\SeoMeta;
 use App\Support\Storage\SupabaseStorageAdapter;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -54,6 +59,7 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->bind(SearchInterpreter::class, ClaudeSearchInterpreter::class);
         $this->app->bind(AiWriter::class, fn () => trim((string) config('services.anthropic.key')) !== ''
             ? new ClaudeAiWriter
             : new NullAiWriter);
@@ -91,6 +97,9 @@ class AppServiceProvider extends ServiceProvider
             'review_report' => ReviewReport::class,
             'contact_message' => ContactMessage::class,
             'role' => Role::class,
+            'quote_request' => QuoteRequest::class,
+            'guide' => Guide::class,
+            'seasonal_period' => SeasonalPeriod::class,
         ]);
 
         Password::defaults(fn () => $this->app->isProduction()

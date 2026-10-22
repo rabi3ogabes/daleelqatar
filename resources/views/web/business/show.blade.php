@@ -409,24 +409,50 @@
                     @endif
                 </section>
 
-                <section class="card card-pad" aria-labelledby="hours-h">
-                    <div class="flex items-center justify-between">
+                @if($business->isPublished() && $business->category && \App\Support\Quotes\QuoteService::enabled())
+                    <a href="{{ route('quotes.create', ['business' => $business->slug]) }}" class="card card-hover group flex items-center gap-4 p-5">
+                        <span class="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-gold-50 text-gold-700 ring-1 ring-gold-200 transition group-hover:bg-gold-400 group-hover:text-navy-950"><x-icon name="message-square-quote" class="size-6" /></span>
+                        <span class="min-w-0 flex-1">
+                            <span class="block font-semibold text-navy-900">{{ __('quotes.cta.business_title') }}</span>
+                            <span class="mt-0.5 block text-sm text-muted-strong">{{ __('quotes.cta.business_text') }}</span>
+                        </span>
+                        <x-icon name="chevron-right" class="size-5 text-gold-600 transition group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5" />
+                    </a>
+                @endif
+
+                @php
+                    $season = $business->currentSeason();
+                    $seasonRows = $business->seasonalHours();
+                    $runningSeason = $season ?? \App\Models\SeasonalPeriod::current()->first();
+                @endphp
+                <section class="card card-pad" aria-labelledby="hours-h" x-data="{ regular: false }">
+                    <div class="flex items-center justify-between gap-3">
                         <h2 id="hours-h" class="font-semibold">{{ __('business.hours') }}</h2>
-                        <span class="text-xs text-muted">{{ __('business.hours_note') }}</span>
+                        @if($season)
+                            <span class="inline-flex items-center gap-1.5 rounded-full bg-navy-900 px-2.5 py-1 text-xs font-semibold text-gold-300" x-show="!regular"><x-icon name="moon" class="size-3.5" />{{ __('seasons.public.label', ['season' => $season->t('name')]) }}</span>
+                        @else
+                            <span class="text-xs text-muted">{{ __('business.hours_note') }}</span>
+                        @endif
                     </div>
-                    @if($hoursByDay->isNotEmpty())
-                        <dl class="mt-4 space-y-1 text-sm">
-                            @foreach([6, 0, 1, 2, 3, 4, 5] as $day)
-                                @php $rows = $hoursByDay->get($day, collect()); @endphp
-                                <div @class(['flex justify-between gap-3 rounded-lg px-2.5 py-1.5', 'bg-gold-50 font-semibold text-navy-900' => $day === $today])>
-                                    <dt>{{ __('business.days.'.$day) }} @if($day === $today)<span class="text-xs font-normal text-gold-700">· {{ __('business.today') }}</span>@endif</dt>
-                                    <dd class="text-end">
-                                        @if($rows->isEmpty())<span class="text-muted">—</span>
-                                        @else{{ $rows->map->formatted()->implode(', ') }}@endif
-                                    </dd>
-                                </div>
-                            @endforeach
-                        </dl>
+                    @if($season)
+                        <div x-show="!regular">
+                            @if($seasonRows->every(fn ($r) => $r->is_closed) && $seasonRows->count() === 7)
+                                <p class="mt-4 rounded-xl bg-navy-50 px-4 py-3 text-sm font-medium text-navy-900">{{ __('seasons.public.closed_season', ['season' => $season->t('name')]) }}</p>
+                            @else
+                                @include('partials.hours-table', ['byDay' => $seasonRows->groupBy('day_of_week'), 'today' => $today])
+                            @endif
+                            <p class="mt-2 text-xs text-muted">{{ $season->dateRange() }}</p>
+                        </div>
+                        @if($hoursByDay->isNotEmpty())
+                            <div x-show="regular" x-cloak>@include('partials.hours-table', ['byDay' => $hoursByDay, 'today' => $today])</div>
+                            <button type="button" class="mt-3 text-xs font-medium text-gold-700 hover:underline" @click="regular = !regular"
+                                x-text="regular ? @js(__('seasons.public.show_season', ['season' => $season->t('name')])) : @js(__('seasons.public.show_regular'))">{{ __('seasons.public.show_regular') }}</button>
+                        @endif
+                    @elseif($hoursByDay->isNotEmpty())
+                        @include('partials.hours-table', ['byDay' => $hoursByDay, 'today' => $today])
+                        @if($runningSeason)
+                            <p class="mt-3 flex items-start gap-2 rounded-xl bg-gold-50 px-3 py-2 text-xs text-navy-900"><x-icon name="moon" class="mt-0.5 size-3.5 shrink-0 text-gold-700" />{{ __('seasons.public.may_differ', ['season' => $runningSeason->t('name')]) }}</p>
+                        @endif
                     @elseif($business->opening_hours_text)
                         <p class="mt-3 whitespace-pre-line text-sm leading-7 text-charcoal" dir="auto">{{ $business->opening_hours_text }}</p>
                     @else

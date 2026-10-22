@@ -33,6 +33,8 @@ class CacheGuestPages
         'businesses.latest' => 300,
         'business.show' => 600,
         'offers.index' => 300,
+        'guides.index' => 900,
+        'guides.show' => 600,
         'offers.show' => 600,
         'directory.az' => 1800,
         'directory.az.letter' => 1800,

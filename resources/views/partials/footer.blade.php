@@ -29,6 +29,8 @@
                         <li><a class="hover:text-gold-300" href="{{ route('businesses.featured') }}">{{ __('nav.featured') }}</a></li>
                         <li><a class="hover:text-gold-300" href="{{ route('businesses.latest') }}">{{ __('nav.latest') }}</a></li>
                         <li><a class="hover:text-gold-300" href="{{ route('offers.index') }}">{{ __('nav.offers') }}</a></li>
+                        <li><a class="hover:text-gold-300" href="{{ route('guides.index') }}">{{ __('guides.nav') }}</a></li>
+                        <li><a class="hover:text-gold-300" href="{{ route('quotes.create') }}">{{ __('quotes.page_title') }}</a></li>
                         <li><a class="hover:text-gold-300" href="{{ route('map') }}">{{ __('directory.map.nav') }}</a></li>
                         <li><a class="hover:text-gold-300" href="{{ route('directory.az') }}">{{ __('directory.az.nav') }}</a></li>
                     </ul>

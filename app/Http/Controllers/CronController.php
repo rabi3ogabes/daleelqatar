@@ -8,6 +8,8 @@ use App\Models\ScrapeSource;
 use App\Support\Categories\CategoryReviewer;
 use App\Support\Deadline;
 use App\Support\Discovery\DiscoveryRunner;
+use App\Support\Quotes\QuoteService;
+use App\Support\Seasons\SeasonReminders;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -61,6 +63,34 @@ class CronController extends Controller
         } catch (Throwable $e) {
             report($e);
             $results['analytics:prune'] = 'failed';
+        }
+
+        // Owners get last month's results during the first week of the month (each owner once).
+        if (now()->day <= 7 && setting('insights.monthly_email', true)) {
+            try {
+                $results['daleel:insights-report'] = Artisan::call('daleel:insights-report', ['--seconds' => 10]) === 0 ? 'ok' : 'failed';
+            } catch (Throwable $e) {
+                report($e);
+                $results['daleel:insights-report'] = 'failed';
+            }
+        }
+
+        // A week before Ramadan or a holiday, owners are reminded to set their special hours.
+        try {
+            app(SeasonReminders::class)->send();
+            $results['seasons:remind'] = 'ok';
+        } catch (Throwable $e) {
+            report($e);
+            $results['seasons:remind'] = 'failed';
+        }
+
+        // Quote requests past their date close themselves.
+        try {
+            app(QuoteService::class)->expireStale();
+            $results['quotes:expire'] = 'ok';
+        } catch (Throwable $e) {
+            report($e);
+            $results['quotes:expire'] = 'failed';
         }
 
         // New listings get their category checked (suggestions wait for an admin in Smart categories).

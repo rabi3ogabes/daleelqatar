@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\Business;
 use App\Support\Analytics\PageKey;
 use App\Support\Analytics\Visit;
+use App\Support\Insights\Impressions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -22,6 +23,21 @@ class VisitController extends Controller
 {
     /** How long one visitor's repeat views of a page count once on the public counter. */
     private const COUNT_ONCE_MINUTES = 30;
+
+    /** A results page reports the listings it showed (see Impressions). */
+    public function impressions(Request $request): JsonResponse
+    {
+        $data = $request->validate(['l' => ['required', 'string', 'max:1200']]);
+        if (Visit::isBot($request->userAgent())) {
+            return response()->json(['ok' => false]);
+        }
+        $ids = Impressions::verify($data['l']);
+        if ($ids !== null) {
+            Impressions::record($ids);
+        }
+
+        return response()->json(['ok' => $ids !== null]);
+    }
 
     public function view(Request $request): JsonResponse
     {

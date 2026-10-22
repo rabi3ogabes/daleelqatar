@@ -17,6 +17,16 @@
         @endif
     </x-page-hero>
     <div class="container-app py-10">
+        @if(\App\Support\Quotes\QuoteService::enabled())
+            <a href="{{ route('quotes.create', ['category' => $category->slug]) }}" class="group mb-8 flex flex-col gap-4 rounded-2xl border border-gold-200 bg-gradient-to-br from-gold-50 to-white p-5 transition hover:border-gold-300 hover:shadow-soft sm:flex-row sm:items-center">
+                <span class="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-navy-900 text-gold-300"><x-icon name="message-square-quote" class="size-6" /></span>
+                <span class="min-w-0 flex-1">
+                    <span class="block font-semibold text-navy-900">{{ __('quotes.cta.category_title', ['category' => $category->t('name')]) }}</span>
+                    <span class="mt-0.5 block text-sm text-muted-strong">{{ __('quotes.cta.category_text') }}</span>
+                </span>
+                <span class="btn btn-gold shrink-0">{{ __('quotes.cta.button') }}<x-icon name="arrow-right" class="size-4 rtl:rotate-180" /></span>
+            </a>
+        @endif
         <x-results :results="$results" :criteria="$criteria" :action="route('categories.show', $category)" :show-category="false"
             :municipalities="$municipalities" :layout="request('view') === 'list' ? 'list' : 'grid'" :favorite-ids="$favoriteIds" />
     </div>

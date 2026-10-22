@@ -46,6 +46,7 @@ final class AdminNavigation
             ]))],
             ['heading' => __('admin.nav.community'), 'items' => array_values(array_filter([
                 $can('reviews.moderate') ? ['label' => __('admin.nav.reviews'), 'route' => 'admin.reviews.index', 'icon' => 'star', 'pattern' => 'admin.reviews.*', 'badge' => $b['reviews']] : null,
+                $can('quotes.manage') ? ['label' => __('quotes.admin.title'), 'route' => 'admin.quotes.index', 'icon' => 'message-square-quote', 'pattern' => 'admin.quotes.*'] : null,
                 $can('reports.handle') ? ['label' => __('admin.nav.reports'), 'route' => 'admin.reports.index', 'icon' => 'flag', 'pattern' => 'admin.reports.*', 'badge' => $b['reports']] : null,
                 $can('messages.manage') ? ['label' => __('admin.nav.messages'), 'route' => 'admin.messages.index', 'icon' => 'inbox', 'pattern' => 'admin.messages.*', 'badge' => $b['messages']] : null,
                 $can('users.view') ? ['label' => __('admin.nav.users'), 'route' => 'admin.users.index', 'icon' => 'users', 'pattern' => 'admin.users.*'] : null,
@@ -54,6 +55,8 @@ final class AdminNavigation
             ['heading' => __('admin.nav.content'), 'items' => array_values(array_filter([
                 $can('content.manage') ? ['label' => __('admin.nav.homepage'), 'route' => 'admin.homepage.edit', 'icon' => 'house', 'pattern' => 'admin.homepage.*'] : null,
                 $can('content.manage') ? ['label' => __('admin.nav.pages'), 'route' => 'admin.pages.index', 'icon' => 'file-text', 'pattern' => 'admin.pages.*'] : null,
+                $can('guides.manage') ? ['label' => __('guides.admin.nav'), 'route' => 'admin.guides.index', 'icon' => 'book-marked', 'pattern' => 'admin.guides.*'] : null,
+                $can('content.manage') ? ['label' => __('seasons.admin.nav'), 'route' => 'admin.seasons.index', 'icon' => 'moon', 'pattern' => 'admin.seasons.*'] : null,
                 $can('content.manage') ? ['label' => __('admin.nav.faqs'), 'route' => 'admin.faqs.index', 'icon' => 'circle-help', 'pattern' => 'admin.faqs.*'] : null,
                 $can('content.manage') ? ['label' => __('admin.nav.banners'), 'route' => 'admin.banners.index', 'icon' => 'megaphone', 'pattern' => 'admin.banners.*'] : null,
             ]))],

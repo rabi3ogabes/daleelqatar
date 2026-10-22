@@ -1,7 +1,7 @@
 @props(['bodyClass' => ''])
 @php $pageKey = \App\Support\Analytics\PageKey::current(); @endphp
 <!DOCTYPE html>
-<html lang="{{ app()->getLocale() }}" dir="{{ locale_is_rtl() ? 'rtl' : 'ltr' }}" data-track="{{ route('visits.view') }}" data-ping="{{ route('visits.ping') }}" @if($pageKey) data-page="{{ $pageKey }}" data-page-sig="{{ \App\Support\Analytics\PageKey::sign($pageKey) }}" @endif data-confirm-title="{{ __('common.confirm_title') }}" data-confirm-label="{{ __('common.confirm_action') }}" data-copied="{{ __('directory.copied') }}" data-reveal-limit="{{ __('directory.reveal_limit') }}">
+<html lang="{{ app()->getLocale() }}" dir="{{ locale_is_rtl() ? 'rtl' : 'ltr' }}" data-track="{{ route('visits.view') }}" data-ping="{{ route('visits.ping') }}" data-impressions-url="{{ route('visits.impressions') }}" @if($pageKey) data-page="{{ $pageKey }}" data-page-sig="{{ \App\Support\Analytics\PageKey::sign($pageKey) }}" @endif data-confirm-title="{{ __('common.confirm_title') }}" data-confirm-label="{{ __('common.confirm_action') }}" data-copied="{{ __('directory.copied') }}" data-reveal-limit="{{ __('directory.reveal_limit') }}">
 <head>
     @include('partials.head')
     @include('partials.integrations')
