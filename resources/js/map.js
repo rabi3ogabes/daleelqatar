@@ -11,6 +11,28 @@ import '../css/map.css';
  */
 const QATAR_BOUNDS = L.latLngBounds([24.45, 50.7], [26.2, 51.7]);
 
+/*
+ * Map backgrounds, best first. If a provider is unreachable (blocked network,
+ * outage, content blocker) the map switches to the next one instead of
+ * staying blank; the businesses are shown whatever the background does.
+ */
+const OSM = '&copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a>';
+const TILE_PROVIDERS = [
+    {
+        url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+        options: { subdomains: 'abcd', maxZoom: 19, attribution: `${OSM} &copy; <a href="https://carto.com/attributions" rel="noopener">CARTO</a>` },
+    },
+    {
+        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+        options: { maxZoom: 19, attribution: OSM },
+    },
+];
+
+/** Tiles that fail before any loads, or no tile at all after this long, mean the provider is unusable. */
+const TILE_FAILURES = 4;
+const TILE_TIMEOUT_MS = 8000;
+const DATA_TIMEOUT_MS = 25000;
+
 function el(tag, className, text) {
     const node = document.createElement(tag);
     if (className) node.className = className;
@@ -27,6 +49,9 @@ function initMap(root) {
     const locate = root.querySelector('[data-map-locate]');
     const reset = root.querySelector('[data-map-reset]');
     const loading = root.querySelector('[data-map-loading]');
+    const errorBox = root.querySelector('[data-map-error]');
+    const retry = root.querySelector('[data-map-retry]');
+    const notice = root.querySelector('[data-map-notice]');
     const rtl = document.documentElement.dir === 'rtl';
 
     const map = L.map(canvas, {
@@ -38,11 +63,49 @@ function initMap(root) {
     }).fitBounds(QATAR_BOUNDS);
     L.control.zoom({ position: rtl ? 'topleft' : 'topright' }).addTo(map);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        subdomains: 'abcd',
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" rel="noopener">CARTO</a>',
-    }).addTo(map);
+    function showNotice(text) {
+        if (!notice) return;
+        notice.textContent = text;
+        notice.hidden = !text;
+    }
+
+    let backgroundReady = false;
+    function useProvider(index) {
+        const provider = TILE_PROVIDERS[index];
+        if (!provider) {
+            showNotice(cfg.labels.no_tiles);
+            return;
+        }
+        const layer = L.tileLayer(provider.url, provider.options);
+        let loaded = 0;
+        let failed = 0;
+        let switched = false;
+        const next = () => {
+            if (switched || loaded > 0) return;
+            switched = true;
+            clearTimeout(timer);
+            map.removeLayer(layer);
+            useProvider(index + 1);
+        };
+        const timer = setTimeout(next, TILE_TIMEOUT_MS);
+        layer.on('tileload', () => {
+            loaded++;
+            if (loaded === 1) {
+                clearTimeout(timer);
+                backgroundReady = true;
+                showNotice(index > 0 ? cfg.labels.backup : '');
+                if (index > 0) setTimeout(() => showNotice(''), 4000);
+            }
+        });
+        layer.on('tileerror', () => {
+            failed++;
+            if (failed >= TILE_FAILURES) next();
+        });
+        layer.addTo(map);
+    }
+    useProvider(0);
+    // Leaflet measures its box once; if the page was still laying out, measure again.
+    setTimeout(() => backgroundReady || map.invalidateSize(), 600);
 
     const pin = L.divIcon({ className: 'dq-pin', html: '<span class="dq-pin__dot"></span>', iconSize: [30, 38], iconAnchor: [15, 36], popupAnchor: [0, -32] });
     const clusters = L.markerClusterGroup({
@@ -108,14 +171,32 @@ function initMap(root) {
         });
     });
 
-    fetch(cfg.dataUrl, { headers: { Accept: 'application/json' } })
-        .then((r) => r.json())
-        .then((data) => {
-            points = data.points || [];
-            Object.assign(categories, data.categories || {});
-            render();
-        })
-        .finally(() => loading?.remove());
+    function load() {
+        if (errorBox) errorBox.hidden = true;
+        if (loading) loading.hidden = false;
+        const controller = typeof AbortController === 'function' ? new AbortController() : null;
+        const timeout = setTimeout(() => controller?.abort(), DATA_TIMEOUT_MS);
+        fetch(cfg.dataUrl, { headers: { Accept: 'application/json' }, signal: controller?.signal })
+            .then((r) => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return r.json();
+            })
+            .then((data) => {
+                if (!Array.isArray(data.points)) throw new Error('Unexpected map data');
+                points = data.points;
+                Object.assign(categories, data.categories || {});
+                render();
+            })
+            .catch(() => {
+                if (errorBox) errorBox.hidden = false;
+            })
+            .finally(() => {
+                clearTimeout(timeout);
+                if (loading) loading.hidden = true;
+            });
+    }
+    retry?.addEventListener('click', load);
+    load();
 }
 
 document.querySelectorAll('[data-dq-map]').forEach(initMap);

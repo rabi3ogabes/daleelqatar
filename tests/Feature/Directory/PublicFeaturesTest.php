@@ -73,7 +73,10 @@ class PublicFeaturesTest extends TestCase
         $this->business(['slug' => 'on-map', 'name_en' => 'Mapped Cafe', 'latitude' => 25.2854, 'longitude' => 51.531, 'geo_precision' => 'exact']);
         $this->business(['slug' => 'pending-map', 'name_en' => 'Hidden Cafe', 'latitude' => 25.3, 'longitude' => 51.5], 'pending');
 
-        $this->get('/en/map')->assertOk()->assertSee('data-dq-map', false)->assertSee(route('en.map.data'), false);
+        $this->get('/en/map')->assertOk()->assertSee('data-dq-map', false)->assertSee(route('en.map.data'), false)
+            // If the map background or the businesses cannot load, visitors get a backup map, a notice or a retry.
+            ->assertSee('data-map-error', false)->assertSee('data-map-retry', false)->assertSee('data-map-notice', false)
+            ->assertSee(__('directory.map.error_title', [], 'en'))->assertSee(e(json_encode(__('directory.map.backup_tiles', [], 'en'))), false);
         $this->get('/map')->assertOk();
 
         $json = $this->getJson('/en/map/data.json')->assertOk()->assertHeader('X-Robots-Tag', 'noindex')->json();
