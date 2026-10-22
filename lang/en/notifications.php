@@ -32,6 +32,8 @@ return [
     'offer_rejected_body' => 'The offer “:offer” was not approved.',
     'staff_claim_title' => 'New ownership claim',
     'staff_verification_title' => 'New verification request',
+    'staff_directory_title' => 'New companies found',
+    'staff_directory_body' => '{1} :source: 1 new company was added for review.|[2,*] :source: :count new companies were added for review.',
     'staff_report_title' => 'New report',
     'staff_contact_title' => 'New contact message',
     'staff_contact_body' => 'New message from :name: :subject',

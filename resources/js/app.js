@@ -172,6 +172,81 @@ window.dqTrack = (url, type) => beacon(url, { type });
 const viewBeacon = document.querySelector('[data-view-beacon]');
 if (viewBeacon) beacon(viewBeacon.dataset.viewBeacon);
 
+/* Visitor analytics: first-party and cookie-free (an anonymous random token in this browser), plus the
+   public view counter of the page. Engaged time only counts while the tab is visible. */
+(() => {
+    const html = document.documentElement;
+    const key = html.dataset.page;
+    if (!html.dataset.track || navigator.webdriver || document.visibilityState === 'prerender') return;
+    const random = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => (b % 36).toString(36)).join('');
+    const stored = (storage, name) => {
+        try {
+            const value = storage.getItem(name);
+            if (value) return [value, false];
+            const fresh = random();
+            storage.setItem(name, fresh);
+            return [fresh, true];
+        } catch {
+            return [null, false];
+        }
+    };
+    const [visitor, isNew] = stored(window.localStorage, 'dq_vid');
+    const [session] = stored(window.sessionStorage, 'dq_sid');
+    const params = new URLSearchParams(window.location.search);
+    const send = (url, body, beaconOnly = false) => {
+        const json = JSON.stringify(body);
+        if (beaconOnly && navigator.sendBeacon) return navigator.sendBeacon(url, new Blob([json], { type: 'application/json' }));
+        return fetch(url, { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: json })
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null);
+    };
+    const showCount = (views) => {
+        const label = new Intl.NumberFormat(html.lang === 'ar' ? 'ar-QA-u-nu-latn' : 'en-US', { notation: views >= 100000 ? 'compact' : 'standard' }).format(views);
+        let targets = document.querySelectorAll('[data-page-views]');
+        if (!targets.length) targets = document.querySelectorAll('[data-page-views-fallback]');
+        targets.forEach((el) => {
+            el.querySelector('[data-page-views-count]').textContent = label;
+            el.hidden = false;
+        });
+    };
+
+    send(html.dataset.track, {
+        k: key || null,
+        g: html.dataset.pageSig || null,
+        p: window.location.pathname,
+        t: document.title,
+        r: document.referrer || null,
+        u: params.get('utm_source'),
+        v: visitor,
+        s: session,
+        n: isNew,
+    }).then((data) => {
+        if (!data) return;
+        if (data.show && data.views) showCount(data.views);
+        if (!data.id) return;
+
+        let engaged = 0;
+        let lastPing = 0;
+        const ping = (beacon = false) => {
+            if (engaged === lastPing) return;
+            lastPing = engaged;
+            send(html.dataset.ping, { id: data.id, token: data.token, e: engaged }, beacon);
+        };
+        const started = Date.now();
+        const timer = setInterval(() => {
+            if (document.visibilityState !== 'visible') return;
+            engaged++;
+            // At 15 s, then every minute, for up to 30 minutes on one page.
+            if (engaged === 15 || (engaged > 15 && engaged % 60 === 0)) ping();
+            if (Date.now() - started > 30 * 60 * 1000) clearInterval(timer);
+        }, 1000);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') ping(true);
+        });
+        window.addEventListener('pagehide', () => ping(true));
+    });
+})();
+
 /* Share profile ------------------------------------------------------------- */
 Alpine.data('share', (url, title, copiedMessage, trackUrl) => ({
     async share() {
@@ -542,6 +617,147 @@ Alpine.data('enrichmentRunner', (cfg) => ({
     },
     stop() {
         this.stopping = true;
+    },
+}));
+
+/* Admin analytics: the real-time card refreshes itself every 15 seconds while the tab is visible. */
+Alpine.data('realtimeAnalytics', (cfg) => ({
+    data: cfg.initial,
+    timer: null,
+    init() {
+        this.timer = setInterval(() => this.refresh(), 15000);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') this.refresh();
+        });
+    },
+    destroy() {
+        clearInterval(this.timer);
+    },
+    async refresh() {
+        if (document.visibilityState !== 'visible') return;
+        try {
+            const res = await fetch(this.cfg.url, { headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' });
+            if (res.ok) this.data = await res.json();
+        } catch {
+            // Keep the last figures; the next tick tries again.
+        }
+    },
+    cfg,
+}));
+
+/* Business page: find the company on another directory (QBCD…) and add what it knows to the review. */
+Alpine.data('directoryImport', (cfg) => ({
+    cfg,
+    sourceId: cfg.sources.length ? cfg.sources[0].id : null,
+    busy: false,
+    phase: '',
+    result: null,
+    error: '',
+    pasted: '',
+    get sourceName() {
+        const s = this.cfg.sources.find((x) => x.id === Number(this.sourceId));
+        return s ? s.name : '';
+    },
+    async run(url = null) {
+        if (this.busy || !this.sourceId) return;
+        Object.assign(this, { busy: true, error: '', phase: url ? 'reading' : 'searching' });
+        if (!url) this.result = null;
+        const slow = setTimeout(() => { this.phase = 'reading'; }, 4000);
+        try {
+            const r = await postJson(this.cfg.url, { source_id: Number(this.sourceId), url });
+            this.result = r;
+            if (url) this.pasted = '';
+        } catch (err) {
+            this.error = err.message;
+        } finally {
+            clearTimeout(slow);
+            this.busy = false;
+        }
+    },
+}));
+
+/* Auto discovery: crawl a source live, run after run, until nothing is left (or the admin stops). */
+Alpine.data('discoveryRunner', (cfg) => ({
+    cfg,
+    open: false,
+    busy: false,
+    finished: false,
+    stopping: false,
+    runs: 0,
+    read: 0,
+    found: 0,
+    created: 0,
+    merged: 0,
+    pending: cfg.pending || 0,
+    listing: false,
+    error: '',
+    async start() {
+        Object.assign(this, { busy: true, finished: false, stopping: false, runs: 0, read: 0, found: 0, created: 0, merged: 0, error: '' });
+        let failures = 0;
+        while (!this.stopping && this.runs < 120) {
+            try {
+                const r = await postJson(this.cfg.url);
+                failures = 0;
+                this.runs++;
+                this.read += r.run.processed;
+                this.found += r.run.discovered;
+                this.created += r.run.created;
+                this.merged += r.run.merged;
+                this.pending = r.pending;
+                this.listing = r.listing;
+                this.error = r.message || '';
+                if (!r.more) break;
+            } catch (err) {
+                this.error = err.message;
+                if (err.status === 422 || ++failures >= 3) break;
+                await new Promise((resolve) => setTimeout(resolve, 3000 * failures));
+            }
+        }
+        this.busy = false;
+        this.finished = true;
+    },
+    stop() {
+        this.stopping = true;
+    },
+}));
+
+/* Auto discovery form: work out method, start address and page pattern from the website address. */
+Alpine.data('sourceAnalyzer', (cfg) => ({
+    cfg,
+    busy: false,
+    result: null,
+    error: '',
+    async analyze() {
+        const base = document.getElementById('f_base_url');
+        if (!base || !base.value || this.busy) return;
+        Object.assign(this, { busy: true, result: null, error: '' });
+        try {
+            this.result = await postJson(this.cfg.url, { url: base.value });
+            if (!this.result.ok) this.error = this.result.message;
+        } catch (err) {
+            this.error = err.message;
+        } finally {
+            this.busy = false;
+        }
+    },
+    applied: false,
+    apply() {
+        if (!this.result || !this.result.ok) return;
+        const set = (id, value) => {
+            const el = document.getElementById(id);
+            if (el && value !== null && value !== undefined) {
+                el.value = value;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        };
+        set('f_base_url', this.result.base_url);
+        set('f_discovery', this.result.mode);
+        set('f_start_urls', this.result.start_urls);
+        set('f_url_pattern', this.result.url_pattern);
+        const name = document.getElementById('f_name');
+        if (name && !name.value) set('f_name', new URL(this.result.base_url).hostname.replace(/^www\./, ''));
+        this.applied = true;
     },
 }));
 

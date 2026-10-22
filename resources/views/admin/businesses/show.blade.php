@@ -162,6 +162,87 @@
                         </div>
                     </dl>
                 </x-dash.panel>
+
+                {{-- Another directory (QBCD…): facts for the empty fields, a description in our own words --}}
+                @php $directorySources = \App\Support\Discovery\DirectoryLookup::sources()->map(fn ($s) => ['id' => $s->id, 'name' => $s->name])->values(); @endphp
+                <x-dash.panel :title="__('enrichment.lookup.title')" :subtitle="__('enrichment.lookup.subtitle')">
+                    @if($directorySources->isEmpty())
+                        <div class="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-strong">
+                            <p>{{ __('enrichment.lookup.no_sources') }}</p>
+                            <a href="{{ route('admin.discovery.index') }}" class="btn btn-outline btn-sm"><x-icon name="radar" class="size-4" />{{ __('enrichment.lookup.setup') }}</a>
+                        </div>
+                    @else
+                        <div x-data="directoryImport(@js(['url' => route('admin.enrichment.directory', $business->id), 'sources' => $directorySources]))" class="space-y-4">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <template x-if="cfg.sources.length > 1">
+                                    <select x-model="sourceId" class="select w-auto min-w-48" aria-label="{{ __('discovery.source') }}">
+                                        <template x-for="s in cfg.sources" :key="s.id"><option :value="s.id" x-text="s.name"></option></template>
+                                    </select>
+                                </template>
+                                <button type="button" class="btn btn-primary btn-sm" @click="run()" :disabled="busy" data-no-busy>
+                                    <x-icon name="radar" class="size-4" x-show="!busy" /><x-icon name="loader-circle" class="size-4 animate-spin" x-show="busy" x-cloak />
+                                    <span x-text="busy ? (phase === 'reading' ? @js(__('enrichment.lookup.reading')) : @js(__('enrichment.lookup.searching', ['source' => '__S__'])).replace('__S__', sourceName)) : @js(__('enrichment.lookup.cta', ['source' => '__S__'])).replace('__S__', sourceName)"></span>
+                                </button>
+                            </div>
+
+                            <p x-show="error" x-cloak class="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger" x-text="error"></p>
+
+                            <template x-if="result">
+                                <div class="space-y-3">
+                                    <p class="flex items-start gap-2 text-sm" :class="result.status === 'matched' ? 'text-success' : 'text-navy-800'">
+                                        <x-icon name="circle-check" class="mt-0.5 size-4.5 shrink-0" x-show="result.status === 'matched'" />
+                                        <x-icon name="info" class="mt-0.5 size-4.5 shrink-0 text-gold-600" x-show="result.status !== 'matched'" />
+                                        <span x-text="result.message"></span>
+                                    </p>
+
+                                    <template x-if="result.listing">
+                                        <div class="flex gap-4 rounded-2xl border border-navy-100 bg-gradient-to-br from-white to-navy-50/50 p-4">
+                                            <template x-if="result.listing.image">
+                                                <a :href="result.listing.image" target="_blank" rel="noopener noreferrer" class="shrink-0">
+                                                    <img :src="result.listing.image" alt="" class="h-20 w-28 rounded-lg bg-white object-cover ring-1 ring-navy-100" referrerpolicy="no-referrer" loading="lazy">
+                                                </a>
+                                            </template>
+                                            <div class="min-w-0 flex-1">
+                                                <p class="font-semibold text-navy-900" dir="auto" x-text="result.listing.title"></p>
+                                                <p class="mt-0.5 text-xs text-muted-strong" x-text="result.listing.categories.join(' · ')"></p>
+                                                <div class="mt-2 flex flex-wrap items-center gap-2">
+                                                    <span class="badge badge-success tabular-nums" x-text="@js(__('enrichment.lookup.match_score', ['score' => '__N__'])).replace('__N__', result.listing.score)"></span>
+                                                    <a :href="result.listing.url" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-xs font-semibold text-gold-700 hover:underline"><x-icon name="external-link" class="size-3.5" /><span x-text="result.source"></span></a>
+                                                </div>
+                                            </div>
+                                            <template x-if="result.review_url && result.status === 'matched'">
+                                                <a :href="result.review_url" class="btn btn-gold btn-sm self-center">{{ __('enrichment.lookup.review') }}<x-icon name="chevron-right" class="size-4" /></a>
+                                            </template>
+                                        </div>
+                                    </template>
+
+                                    <template x-if="result.status === 'candidates' && result.candidates.length">
+                                        <ul class="divide-y divide-navy-50 overflow-hidden rounded-2xl border border-navy-100">
+                                            <template x-for="c in result.candidates" :key="c.url">
+                                                <li class="flex items-center gap-3 px-4 py-2.5 text-sm">
+                                                    <span class="min-w-0 flex-1">
+                                                        <span class="block truncate font-medium text-navy-900" dir="auto" x-text="c.title"></span>
+                                                        <a :href="c.url" target="_blank" rel="noopener noreferrer" class="block truncate text-xs text-muted hover:text-gold-700" dir="ltr" x-text="c.url"></a>
+                                                    </span>
+                                                    <span class="badge badge-muted tabular-nums" x-text="Math.round(c.score * 100) + '%'"></span>
+                                                    <button type="button" class="btn btn-outline btn-sm" @click="run(c.url)" :disabled="busy" data-no-busy>{{ __('enrichment.lookup.use') }}</button>
+                                                </li>
+                                            </template>
+                                        </ul>
+                                    </template>
+                                </div>
+                            </template>
+
+                            <form class="flex flex-col gap-2 border-t border-navy-50 pt-4 sm:flex-row sm:items-end" @submit.prevent="run(pasted)">
+                                <div class="min-w-0 flex-1">
+                                    <label for="dir-url" class="label text-xs" x-text="@js(__('enrichment.lookup.paste', ['source' => '__S__'])).replace('__S__', sourceName)"></label>
+                                    <input id="dir-url" type="url" dir="ltr" class="input" x-model="pasted" placeholder="https://www.qatarcontact.com/listing/…">
+                                </div>
+                                <button class="btn btn-outline" :disabled="busy || !pasted" data-no-busy><x-icon name="link" class="size-4" />{{ __('enrichment.lookup.paste_cta') }}</button>
+                            </form>
+                        </div>
+                    @endif
+                </x-dash.panel>
             @endunless @endcan
 
             {{-- Category check --}}

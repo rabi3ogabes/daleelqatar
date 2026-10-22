@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Faq;
 use App\Models\Page;
+use Database\Seeders\Content\PolicyPages;
 use Illuminate\Database\Seeder;
 
 /** Initial CMS pages and FAQs. Administrators edit these from the dashboard. */
@@ -148,6 +149,11 @@ The directory presents information as provided by businesses and is not responsi
 MD,
             ],
         ];
+
+        [$privacyAr, $privacyEn] = PolicyPages::privacySection();
+        $pages['privacy'][2] .= "\n".$privacyAr."\n";
+        $pages['privacy'][3] .= "\n".$privacyEn."\n";
+        $pages += PolicyPages::pages();
 
         foreach ($pages as $slug => [$tAr, $tEn, $bAr, $bEn]) {
             Page::query()->firstOrCreate(['slug' => $slug], [

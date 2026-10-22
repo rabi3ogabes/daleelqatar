@@ -3,14 +3,25 @@
     $fields = (array) $suggestion->fields;
     $match = (array) ($suggestion->match ?? []);
     $pending = $suggestion->isPending();
-    $sourceTone = ['google' => 'badge-info', 'website' => 'badge-success', 'email' => 'badge-success', 'ai' => 'badge-gold', 'inferred' => 'badge-muted'];
-    $sourceIcon = ['google' => 'map-pin', 'website' => 'globe', 'email' => 'mail', 'ai' => 'sparkles', 'inferred' => 'info'];
+    $sourceTone = ['google' => 'badge-info', 'website' => 'badge-success', 'email' => 'badge-success', 'ai' => 'badge-gold', 'inferred' => 'badge-muted', 'directory' => 'badge-verified'];
+    $sourceIcon = ['google' => 'map-pin', 'website' => 'globe', 'email' => 'mail', 'ai' => 'sparkles', 'inferred' => 'info', 'directory' => 'radar'];
+    $directory = (array) ($suggestion->notes['directory'] ?? []);
+    $notes = (array) $suggestion->notes;
+    // A suggestion made only from a directory has nothing to say about Google or the website.
+    $onlyDirectory = $directory !== [] && array_diff((array) $suggestion->sources, ['directory', 'ai']) === [] && ! isset($notes['google']) && ! isset($notes['website']);
     $confTone = ['high' => 'badge-success', 'medium' => 'badge-warning', 'low' => 'badge-danger'];
     $rtl = ['name_ar', 'tagline_ar', 'description_ar', 'address_ar'];
-    $ltr = ['phone', 'whatsapp', 'website', 'location'];
+    $ltr = ['phone', 'whatsapp', 'website', 'location', 'email', 'extra_phones', 'extra_emails'];
     $show = function ($v) {
         if (is_array($v)) {
-            return isset($v['lat']) ? $v['lat'].', '.$v['lng'] : null;
+            if (isset($v['lat'])) {
+                return $v['lat'].', '.$v['lng'];
+            }
+            if (isset($v['label'])) {
+                return (string) $v['label'];
+            }
+
+            return array_is_list($v) && $v !== [] && is_scalar($v[0]) ? implode(', ', $v) : null;
         }
 
         return filled($v) ? (string) $v : null;
@@ -98,6 +109,18 @@
                                                     @foreach((array) ($f['value']['lines'] ?? []) as $line)<li>{{ $line }}</li>@endforeach
                                                 </ul>
                                                 @break
+                                            @case('logo')
+                                                <div class="flex items-center gap-3 rounded-xl border border-navy-100 p-3">
+                                                    <img src="{{ $f['value'] }}" alt="" class="size-16 rounded-lg bg-white object-contain ring-1 ring-navy-100" referrerpolicy="no-referrer" loading="lazy">
+                                                    <p class="text-xs leading-5 text-muted-strong">{{ __('enrichment.logo_hint') }}</p>
+                                                </div>
+                                                @break
+                                            @case('category')
+                                                <div class="rounded-xl border border-navy-100 px-3 py-2.5 text-sm">
+                                                    <p class="font-medium text-navy-900">{{ $f['value']['label'] ?? '' }}</p>
+                                                    @if(! empty($f['note_params']['label']))<p class="mt-0.5 text-xs text-muted-strong" dir="auto">{{ __('enrichment.their_category', ['label' => $f['note_params']['label']]) }}</p>@endif
+                                                </div>
+                                                @break
                                             @case('social')
                                                 <ul class="space-y-1 rounded-xl border border-navy-100 px-3 py-2.5 text-sm" dir="ltr">
                                                     @foreach((array) $f['value'] as $platform => $url)<li class="truncate"><span class="font-semibold capitalize">{{ $platform }}</span> · <a href="{{ $url }}" target="_blank" rel="noopener noreferrer nofollow" class="text-gold-700 hover:underline">{{ $url }}</a></li>@endforeach
@@ -145,6 +168,42 @@
 
         {{-- Context --}}
         <aside class="space-y-6">
+            @if($directory !== [])
+                <x-dash.panel :title="__('enrichment.directory.title', ['source' => $directory['source'] ?? ''])">
+                    @php $score = (int) round(((float) ($directory['score'] ?? 0)) * 100); @endphp
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="badge {{ $score >= 90 ? 'badge-success' : ($score >= 80 ? 'badge-warning' : 'badge-muted') }}">{{ ! empty($directory['chosen']) ? __('enrichment.directory.chosen') : __('enrichment.directory.matched') }}</span>
+                        <span class="text-sm font-bold tabular-nums text-navy-900">{{ $score }}%</span>
+                    </div>
+                    <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-navy-100"><div class="h-full rounded-full {{ $score >= 90 ? 'bg-success' : 'bg-warning' }}" style="width: {{ min(100, $score) }}%"></div></div>
+                    <p class="mt-4 font-semibold text-navy-900" dir="auto">{{ $directory['title'] ?? '' }}</p>
+                    @if(! empty($directory['categories']))
+                        <div class="mt-2 flex flex-wrap gap-1">@foreach($directory['categories'] as $label)<span class="badge badge-muted" dir="auto">{{ \Illuminate\Support\Str::title(\Illuminate\Support\Str::lower($label)) }}</span>@endforeach</div>
+                    @endif
+                    <dl class="mt-3 space-y-1.5 text-xs">
+                        @foreach(['phones' => 'phone', 'emails' => 'mail', 'address' => 'map-pin'] as $key => $icon)
+                            @if(! empty($directory[$key]))
+                                <div class="flex items-start gap-2"><dt><x-icon :name="$icon" class="mt-0.5 size-3.5 text-muted" /><span class="sr-only">{{ __('enrichment.directory.'.$key) }}</span></dt>
+                                    <dd class="min-w-0 break-words text-navy-800" dir="{{ $key === 'address' ? 'auto' : 'ltr' }}">{{ is_array($directory[$key]) ? implode(', ', $directory[$key]) : $directory[$key] }}</dd></div>
+                            @endif
+                        @endforeach
+                    </dl>
+                    @if(! empty($directory['image']))
+                        <figure class="mt-4">
+                            <a href="{{ $directory['image'] }}" target="_blank" rel="noopener noreferrer" class="group block overflow-hidden rounded-xl ring-1 ring-navy-100">
+                                <img src="{{ $directory['image'] }}" alt="{{ __('enrichment.directory.card') }}" class="max-h-60 w-full bg-navy-50 object-contain transition group-hover:scale-[1.02]" referrerpolicy="no-referrer" loading="lazy">
+                            </a>
+                            <figcaption class="mt-1.5 text-[0.7rem] leading-4 text-muted">{{ __('enrichment.directory.card_hint') }}</figcaption>
+                        </figure>
+                    @endif
+                    @if(! empty($directory['url']))
+                        <a href="{{ $directory['url'] }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm mt-4 w-full"><x-icon name="external-link" class="size-4" />{{ __('enrichment.directory.open', ['source' => $directory['source'] ?? '']) }}</a>
+                    @endif
+                    <p class="mt-3 text-[0.7rem] leading-4 text-muted">{{ __('enrichment.directory.policy') }}</p>
+                </x-dash.panel>
+            @endif
+
+            @unless($onlyDirectory)
             <x-dash.panel :title="__('enrichment.google_match')">
                 @if(! empty($match['place_id']) && empty($match['rejected']))
                     @php $level = $suggestion->confidenceLevel(); @endphp
@@ -205,8 +264,9 @@
                     </div>
                 </div>
             </x-dash.panel>
+            @endunless
 
-            @if(! empty($suggestion->notes['ai']))
+            @if(! empty($suggestion->notes['ai']) && is_string($suggestion->notes['ai']))
                 <div class="rounded-xl border border-navy-100 bg-white px-4 py-3 text-xs leading-5 text-muted-strong"><x-icon name="sparkles" class="inline size-3.5 text-gold-600" /> {{ __('enrichment.notes.'.(str_starts_with($suggestion->notes['ai'], 'ai_') && \Illuminate\Support\Facades\Lang::has('enrichment.notes.'.$suggestion->notes['ai']) ? $suggestion->notes['ai'] : 'ai_failed')) }}</div>
             @endif
             <p class="px-1 text-xs leading-5 text-muted">{{ __('enrichment.review_hint') }}</p>

@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Page;
 use App\Services\AuditLogger;
+use App\Support\AdsenseReadiness;
 use App\Support\Sitemap;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,6 +27,7 @@ class PageController extends Controller
 
     public function update(Request $request, Page $page, AuditLogger $audit): RedirectResponse
     {
+        AdsenseReadiness::forget();
         $data = $request->validate([
             'title_ar' => ['required', 'string', 'max:200'],
             'title_en' => ['required', 'string', 'max:200'],

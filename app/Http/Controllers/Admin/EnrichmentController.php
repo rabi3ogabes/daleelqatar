@@ -7,7 +7,11 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Business;
 use App\Models\BusinessSuggestion;
+use App\Models\ScrapeSource;
 use App\Support\Deadline;
+use App\Support\Discovery\DirectoryLookup;
+use App\Support\Discovery\DiscoveryException;
+use App\Support\Discovery\Fetcher;
 use App\Support\Enrichment\AiWriter;
 use App\Support\Enrichment\DataQuality;
 use App\Support\Enrichment\Enricher;
@@ -127,6 +131,65 @@ class EnrichmentController extends Controller
         return $suggestion->status === 'pending'
             ? redirect()->route('admin.enrichment.show', $suggestion)
             : back()->with('info', __('enrichment.nothing_new'));
+    }
+
+    /**
+     * "Import from QBCD": finds the listing on another directory and adds what it knows to the
+     * review queue. A sure match is read at once; otherwise the candidates are returned to choose
+     * from (or the administrator pastes the page address).
+     */
+    public function directory(Request $request, int $business): JsonResponse
+    {
+        $data = $request->validate([
+            'source_id' => ['nullable', 'integer'],
+            'url' => ['nullable', 'url:http,https', 'max:2000'],
+        ]);
+        $model = Business::query()->findOrFail($business);
+        $sources = DirectoryLookup::sources();
+        $source = isset($data['source_id']) ? $sources->firstWhere('id', (int) $data['source_id']) : $sources->first();
+        if (! $source instanceof ScrapeSource) {
+            return response()->json(['status' => 'error', 'message' => __('enrichment.lookup.no_sources')], 422);
+        }
+
+        @set_time_limit(60);
+        Deadline::start(self::DEADLINE_SECONDS);
+        try {
+            $found = (new DirectoryLookup(new Fetcher(600, 12)))->find($model, $source, $data['url'] ?? null);
+        } catch (DiscoveryException $e) {
+            $message = in_array($e->getMessage(), ['other_site', 'redirect_other_site'], true)
+                ? DiscoveryController::reason($e->getMessage())
+                : __('enrichment.lookup.failed');
+
+            return response()->json(['status' => 'error', 'message' => $message], 422);
+        }
+
+        $payload = ['source' => $source->name, 'candidates' => $found['candidates']];
+        if ($found['status'] !== 'matched') {
+            return response()->json($payload + [
+                'status' => $found['status'],
+                'message' => $found['status'] === 'none' ? __('enrichment.lookup.none', ['source' => $source->name]) : __('enrichment.lookup.candidates'),
+            ]);
+        }
+
+        $before = BusinessSuggestion::query()->where('business_id', $model->id)->pending()->latest('id')->first();
+        $beforeCount = count((array) ($before?->fields ?? []));
+        $suggestion = $this->enricher->fromDirectory($model, $source, $found['match']);
+        $added = count((array) $suggestion->fields) - ($before?->is($suggestion) ? $beforeCount : 0);
+        $match = $found['match'];
+
+        return response()->json($payload + [
+            'status' => $added > 0 ? 'matched' : 'nothing_new',
+            'message' => $added > 0 ? __('enrichment.lookup.matched') : __('enrichment.lookup.nothing_new', ['source' => $source->name]),
+            'added' => $added,
+            'review_url' => $suggestion->isPending() ? route('admin.enrichment.show', $suggestion) : null,
+            'listing' => [
+                'title' => $match['title'],
+                'url' => $match['url'],
+                'score' => (int) round($match['score'] * 100),
+                'image' => $match['record']['image_url'] ?? null,
+                'categories' => $match['record']['categories'] ?? [],
+            ],
+        ]);
     }
 
     public function show(BusinessSuggestion $suggestion): View

@@ -103,11 +103,11 @@ final class Sitemap
             foreach (['categories.index', 'locations.index', 'map', 'directory.az', 'offers.index', 'businesses.featured', 'businesses.latest', 'about', 'faq', 'contact', 'add-business'] as $static) {
                 $add($static, [], null, '0.5');
             }
-            Page::query()->where('is_published', true)->whereIn('slug', ['privacy', 'terms'])->get()
+            Page::query()->where('is_published', true)->whereIn('slug', ['privacy', 'terms', 'cookies', 'disclaimer', 'editorial', 'advertise'])->get()
                 ->each(fn ($p) => $add($p->slug, [], $p->updated_at, '0.2'));
         } elseif ($name === 'taxonomy') {
             $rootCounts = Directory::categoryCounts();
-            $subCounts = self::businessQuery()->selectRaw('businesses.category_id, COUNT(*) AS total')
+            $subCounts = self::businessQuery(quality: false)->selectRaw('businesses.category_id, COUNT(*) AS total')
                 ->groupBy('businesses.category_id')->pluck('total', 'category_id');
             Category::query()->active()->orderBy('id')->get(['id', 'slug', 'parent_id', 'updated_at'])
                 ->each(function (Category $c) use ($add, $rootCounts, $subCounts) {
@@ -140,9 +140,12 @@ final class Sitemap
         return $entries;
     }
 
-    private static function businessQuery()
+    private static function businessQuery(bool $quality = true)
     {
-        return Business::query()->published()->where('businesses.is_demo', false);
+        $query = Business::query()->published()->where('businesses.is_demo', false);
+
+        // Thin listings are noindexed, so they are not offered to search engines either.
+        return $quality && ListingQuality::enabled() ? ListingQuality::scopeRich($query) : $query;
     }
 
     private static function date(mixed $value): ?string

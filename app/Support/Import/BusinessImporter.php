@@ -40,7 +40,10 @@ final class BusinessImporter
 
     /**
      * @param  array<string, mixed>  $record  output of RecordBuilder
-     * @param  array{publish?: bool, update_existing?: bool, default_category_id?: ?int}  $options
+     *                                        Records from other directories (option "directory") follow the directory content rule: their facts
+     *                                        are imported, but their description text is only kept privately (business_sources.details) as input
+     *                                        for the AI rewrite — never published as written.
+     * @param  array{publish?: bool, update_existing?: bool, default_category_id?: ?int, directory?: bool}  $options
      * @return array{status: string, business_id: ?int, message: ?string}
      */
     public function import(array $record, string $sourceKey, array $options = []): array
@@ -52,7 +55,14 @@ final class BusinessImporter
 
         $externalId = $record['external_id'] ?: ($record['source_url'] ?: $this->fingerprint($record));
 
-        return DB::transaction(function () use ($record, $sourceKey, $externalId, $options) {
+        if (! empty($options['directory'])) {
+            $snapshot = self::snapshot($record);
+            // Their text still helps to pick the right category; it is just not published.
+            $record['category_hint'] = $record['description'] ?? null;
+            $record['description'] = null;
+        }
+
+        return DB::transaction(function () use ($record, $sourceKey, $externalId, $options, &$snapshot) {
             $source = BusinessSource::query()->where('source', $sourceKey)->where('external_id', $externalId)->first();
             $existing = $source?->business_id ? Business::withTrashed()->find($source->business_id) : null;
             $reason = $existing ? 'same_source' : null;
@@ -63,18 +73,18 @@ final class BusinessImporter
 
             if ($existing) {
                 if ($existing->trashed()) {
-                    $this->touchSource($existing->id, $sourceKey, $externalId, $record['source_url'] ?? null);
+                    $this->touchSource($existing->id, $sourceKey, $externalId, $record['source_url'] ?? null, $snapshot ?? null);
 
                     return ['status' => self::SKIPPED, 'business_id' => $existing->id, 'message' => 'deleted_listing'];
                 }
-                $changed = ($options['update_existing'] ?? true) ? $this->merge($existing, $record) : false;
-                $this->touchSource($existing->id, $sourceKey, $externalId, $record['source_url'] ?? null);
+                $changed = ($options['update_existing'] ?? true) ? $this->merge($existing, $record, ! empty($options['directory'])) : false;
+                $this->touchSource($existing->id, $sourceKey, $externalId, $record['source_url'] ?? null, $snapshot ?? null);
 
                 return ['status' => $changed ? self::MERGED : self::SKIPPED, 'business_id' => $existing->id, 'message' => 'duplicate:'.$reason];
             }
 
             $business = $this->create($record, $options);
-            $this->touchSource($business->id, $sourceKey, $externalId, $record['source_url'] ?? null);
+            $this->touchSource($business->id, $sourceKey, $externalId, $record['source_url'] ?? null, $snapshot ?? null);
 
             return ['status' => self::CREATED, 'business_id' => $business->id, 'message' => null];
         });
@@ -163,7 +173,7 @@ final class BusinessImporter
 
     private function create(array $record, array $options): Business
     {
-        $categoryIds = $this->categories->match($record['categories'] ?? [], $record['tags'] ?? [], $record['name_en'] ?? null, ['name_ar' => $record['name_ar'] ?? null, 'description' => $record['description'] ?? null]);
+        $categoryIds = $this->categories->match($record['categories'] ?? [], $record['tags'] ?? [], $record['name_en'] ?? null, ['name_ar' => $record['name_ar'] ?? null, 'description' => $record['description'] ?? $record['category_hint'] ?? null]);
         if (! empty($options['default_category_id']) && $this->categories->isFallback($categoryIds[0])) {
             $categoryIds = [(int) $options['default_category_id']];
         }
@@ -213,7 +223,7 @@ final class BusinessImporter
     }
 
     /** Fill only empty fields; never touch listings an owner has claimed. */
-    private function merge(Business $business, array $record): bool
+    private function merge(Business $business, array $record, bool $directory = false): bool
     {
         if ($business->owner_id !== null) {
             return false;
@@ -257,7 +267,7 @@ final class BusinessImporter
 
         // A better category than "Other businesses".
         if ($this->categories->isFallback((int) $business->category_id)) {
-            $ids = $this->categories->match($record['categories'] ?? [], $record['tags'] ?? [], $business->name_en, ['name_ar' => $business->name_ar, 'description' => $record['description'] ?? null]);
+            $ids = $this->categories->match($record['categories'] ?? [], $record['tags'] ?? [], $business->name_en, ['name_ar' => $business->name_ar, 'description' => $record['description'] ?? $record['category_hint'] ?? null]);
             if (! $this->categories->isFallback($ids[0])) {
                 $fill['category_id'] = $ids[0];
             }
@@ -268,6 +278,14 @@ final class BusinessImporter
         if ($incoming && max(Normalizer::nameSimilarity($incoming, $business->name_en), Normalizer::nameSimilarity($incoming, $business->name_ar)) < 0.85
             && ! str_contains(Str::lower((string) $business->keywords), Str::lower($incoming))) {
             $fill['keywords'] = Str::limit(trim(($business->keywords ? $business->keywords.', ' : '').$incoming, ', '), 500, '');
+        }
+
+        // The directory's own category labels are kept as keywords: search finds the listing by
+        // them and the category check reads them as evidence.
+        $keywords = (string) ($fill['keywords'] ?? $business->keywords);
+        $labels = ! $directory ? [] : array_filter($record['categories'] ?? [], fn ($label) => ! str_contains(Str::lower($keywords), Str::lower((string) $label)));
+        if ($labels !== []) {
+            $fill['keywords'] = Str::limit(trim(($keywords !== '' ? $keywords.', ' : '').implode(', ', $labels), ', '), 500, '');
         }
 
         $socialAdded = $this->addSocial($business, $record['social'] ?? []);
@@ -307,13 +325,45 @@ final class BusinessImporter
         return $added;
     }
 
-    private function touchSource(int $businessId, string $source, string $externalId, ?string $url): void
+    private function touchSource(int $businessId, string $source, string $externalId, ?string $url, ?array $details = null): void
     {
-        BusinessSource::query()->upsert(
-            [['business_id' => $businessId, 'source' => $source, 'external_id' => Str::limit($externalId, 191, ''), 'url' => $url ? Str::limit($url, 500, '') : null, 'first_seen_at' => now(), 'last_seen_at' => now()]],
-            ['source', 'external_id'],
-            ['business_id', 'url', 'last_seen_at'],
-        );
+        $row = ['business_id' => $businessId, 'source' => $source, 'external_id' => Str::limit($externalId, 191, ''), 'url' => $url ? Str::limit($url, 500, '') : null, 'first_seen_at' => now(), 'last_seen_at' => now()];
+        $update = ['business_id', 'url', 'last_seen_at'];
+        if ($details !== null) {
+            $row['details'] = json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $update[] = 'details';
+        }
+        BusinessSource::query()->upsert([$row], ['source', 'external_id'], $update);
+    }
+
+    /** Links a listing to its page on another directory, keeping what that page says privately. */
+    public function remember(int $businessId, string $sourceKey, string $url, array $record): void
+    {
+        $this->touchSource($businessId, $sourceKey, $record['external_id'] ?? $url, $url, self::snapshot($record));
+    }
+
+    /**
+     * What a directory says about a listing, kept privately: the facts as they read them, their
+     * description (input for the AI rewrite) and the business-card / logo images (shown to admins).
+     *
+     * @return array<string, mixed>
+     */
+    public static function snapshot(array $record): array
+    {
+        return array_filter([
+            'name' => $record['name_en'] ?? $record['name_ar'] ?? null,
+            'categories' => $record['categories'] ?? [],
+            'description' => isset($record['description']) ? Str::limit((string) $record['description'], 4000, '') : null,
+            'phones' => array_values(array_filter([$record['phone'] ?? null, $record['whatsapp'] ?? null, ...($record['extra_phones'] ?? [])])),
+            'emails' => array_values(array_filter([$record['email'] ?? null, ...($record['extra_emails'] ?? [])])),
+            'website' => $record['website'] ?? null,
+            'address' => $record['address'] ?? null,
+            'city' => $record['city'] ?? null,
+            'location' => isset($record['latitude']) ? ['lat' => $record['latitude'], 'lng' => $record['longitude']] : null,
+            'image' => $record['image_url'] ?? null,
+            'logo' => $record['logo_url'] ?? null,
+            'fetched_at' => now()->toIso8601String(),
+        ], fn ($v) => $v !== null && $v !== '' && $v !== []);
     }
 
     private function keywords(array $record): ?string

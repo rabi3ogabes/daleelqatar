@@ -11,6 +11,7 @@ use App\Support\Discovery\DiscoveryRunner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Console\Commands\PruneExpired;
 use Throwable;
 
@@ -51,6 +52,15 @@ class CronController extends Controller
                 report($e);
                 $results[$command] = 'failed';
             }
+        }
+
+        // Visitor analytics keep 13 months of page views (enough for year-on-year comparisons).
+        try {
+            DB::table('page_views')->where('created_at', '<', now()->subDays(400))->limit(50000)->delete();
+            $results['analytics:prune'] = 'ok';
+        } catch (Throwable $e) {
+            report($e);
+            $results['analytics:prune'] = 'failed';
         }
 
         // New listings get their category checked (suggestions wait for an admin in Smart categories).

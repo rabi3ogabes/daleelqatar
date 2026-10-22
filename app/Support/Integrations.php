@@ -32,7 +32,15 @@ final class Integrations
     /** Ads load only on public, indexable content pages (AdSense policy: no ads on thin or non-content screens). */
     public static function showAds(): bool
     {
-        return self::enabled() && self::adsenseClient() !== null && setting('integrations.adsense_enabled', true) && seo()->shouldIndex();
+        return self::enabled() && self::adsenseClient() !== null && setting('integrations.adsense_enabled', true) && seo()->shouldIndex() && self::contentPage();
+    }
+
+    /** Pages that are mostly a form, and error pages (no named route), never carry ads. */
+    private static function contentPage(): bool
+    {
+        $name = (string) preg_replace('/^(ar|en)\./', '', (string) request()->route()?->getName());
+
+        return $name !== '' && ! in_array($name, ['contact', 'add-business', 'business.claim', 'search'], true);
     }
 
     public static function consentBanner(): bool

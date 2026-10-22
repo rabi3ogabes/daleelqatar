@@ -10,7 +10,6 @@ use App\Services\BusinessManager;
 use App\Support\Enrichment\LogoFinder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
 
 /**
@@ -72,13 +71,7 @@ class LogoController extends Controller
             }
         }
 
-        $path = tempnam(sys_get_temp_dir(), 'logo');
-        file_put_contents($path, $png);
-        try {
-            $this->manager->setLogo($business, new UploadedFile($path, 'logo.png', 'image/png', null, true), array_filter($metadata));
-        } finally {
-            @unlink($path);
-        }
+        $this->manager->setLogoPng($business, $png, array_filter($metadata));
 
         session()->flash('success', __('logos.saved'));
 

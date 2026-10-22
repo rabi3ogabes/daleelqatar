@@ -56,16 +56,25 @@
                         <li><a class="hover:text-gold-300" href="{{ route('contact') }}">{{ __('nav.contact') }}</a></li>
                         <li><a class="hover:text-gold-300" href="{{ route('faq') }}">{{ __('nav.faq') }}</a></li>
                         <li><a class="hover:text-gold-300" href="{{ route('add-business') }}">{{ __('nav.add_business') }}</a></li>
-                        <li><a class="hover:text-gold-300" href="{{ route('privacy') }}">{{ __('nav.privacy') }}</a></li>
-                        <li><a class="hover:text-gold-300" href="{{ route('terms') }}">{{ __('nav.terms') }}</a></li>
+                        <li><a class="hover:text-gold-300" href="{{ route('advertise') }}">{{ __('nav.advertise') }}</a></li>
+                        <li><a class="hover:text-gold-300" href="{{ route('editorial') }}">{{ __('nav.editorial') }}</a></li>
                     </ul>
                 </div>
             </div>
         </div>
-        <div class="mt-12 flex flex-col items-center justify-between gap-3 border-t border-white/10 pt-6 text-xs text-white/50 sm:flex-row">
+        <nav class="mt-12 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-white/10 pt-6 text-xs text-white/60 sm:justify-start" aria-label="{{ __('nav.legal') }}">
+            <a class="hover:text-gold-300" href="{{ route('privacy') }}">{{ __('nav.privacy') }}</a>
+            <a class="hover:text-gold-300" href="{{ route('terms') }}">{{ __('nav.terms') }}</a>
+            <a class="hover:text-gold-300" href="{{ route('cookies') }}">{{ __('nav.cookies') }}</a>
+            <a class="hover:text-gold-300" href="{{ route('disclaimer') }}">{{ __('nav.disclaimer') }}</a>
+            @if(\App\Support\Integrations::consentBanner())
+                <button type="button" class="hover:text-gold-300" data-consent-open>{{ __('nav.cookie_settings') }}</button>
+            @endif
+        </nav>
+        <div class="mt-4 flex flex-col items-center justify-between gap-3 text-xs text-white/50 sm:flex-row">
             <p>{{ __('footer.rights', ['year' => now()->year]) }}</p>
             <p class="flex items-center gap-2"><span class="inline-block h-px w-6 bg-gold-500/60"></span>{{ __('footer.made_in') }}<span class="inline-block h-px w-6 bg-gold-500/60"></span></p>
-            <p dir="ltr">daleelqatar.com</p>
+            <p class="flex items-center gap-4"><x-page-views dark fallback /><span dir="ltr">daleelqatar.com</span></p>
         </div>
     </div>
 </footer>

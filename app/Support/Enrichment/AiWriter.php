@@ -18,12 +18,14 @@ interface AiWriter
     public function arabicNames(array $businesses): array;
 
     /**
-     * A factual profile written only from the company's own website text.
+     * A factual profile written only from the company's own website text — or, with origin
+     * "directory", from another directory's listing, always rewritten in our own words.
      *
      * @param  array<string,string>  $pages  url => page text
+     * @param  'website'|'directory'  $origin
      * @return array{found: bool, description_en: ?string, description_ar: ?string, tagline_en: ?string, tagline_ar: ?string, services: list<array{name_en: string, name_ar: string}>}
      */
-    public function profileFromWebsite(string $name, ?string $category, array $pages): array;
+    public function profileFromWebsite(string $name, ?string $category, array $pages, string $origin = 'website'): array;
 
     /**
      * The best category for each business, chosen only from the given taxonomy.

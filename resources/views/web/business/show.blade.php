@@ -55,6 +55,7 @@
                         <div class="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-strong">
                             @if($business->locationLabel())<span class="inline-flex items-center gap-1.5"><x-icon name="map-pin" class="size-4 text-gold-600" />{{ $business->locationLabel() }}</span>@endif
                             <x-rating :value="$business->rating_avg" :count="$business->reviews_count" size="lg" />
+                            <x-page-views />
                             @if($openNow !== null)
                                 <span @class(['inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold', 'bg-success-soft text-success' => $openNow, 'bg-navy-50 text-muted-strong' => ! $openNow])>
                                     <span class="size-1.5 rounded-full bg-current"></span>{{ $openNow ? __('business.open_now') : __('business.closed_now') }}

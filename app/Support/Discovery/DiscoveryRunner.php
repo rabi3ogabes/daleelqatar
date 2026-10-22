@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace App\Support\Discovery;
 
+use App\Models\Business;
 use App\Models\ScrapeSource;
 use App\Models\ScrapeUrl;
+use App\Models\User;
+use App\Notifications\StaffAlert;
+use App\Services\BusinessManager;
+use App\Support\Enrichment\LogoFinder;
 use App\Support\Import\BusinessImporter;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -25,7 +31,10 @@ final class DiscoveryRunner
 
     public const COUNTERS = ['discovered', 'processed', 'created', 'merged', 'skipped', 'failed'];
 
-    public function __construct(private readonly BusinessImporter $importer) {}
+    public function __construct(
+        private readonly BusinessImporter $importer,
+        private readonly BusinessManager $manager,
+    ) {}
 
     /** @return array<string, int|string> counters for this run plus a "status" */
     public function run(ScrapeSource $source, float $seconds = 20.0): array
@@ -57,13 +66,14 @@ final class DiscoveryRunner
 
             $limit = max(1, (int) $source->setting('max_pages_per_run', 40));
             $selectors = (array) ($source->selectors ?? []);
-            $options = ['publish' => (bool) $source->setting('publish', false), 'update_existing' => true];
+            // Another directory: its facts are imported, its wording is not (see BusinessImporter).
+            $options = ['publish' => (bool) $source->setting('publish', false), 'update_existing' => true, 'directory' => true];
 
             foreach ($source->urls()->where('status', 'pending')->orderBy('id')->limit($limit)->get() as $url) {
                 if (! $hasTime($fetcher->waitFor($url->url))) {
                     break;
                 }
-                $outcome = $this->process($url, $source, $fetcher, $selectors, $options);
+                $outcome = $this->process($url, $source, $fetcher, $selectors, $options, $hasTime);
                 $run['processed']++;
                 $run[$outcome]++;
             }
@@ -79,17 +89,37 @@ final class DiscoveryRunner
             $stats[$key] = (int) ($stats[$key] ?? 0) + $run[$key];
         }
         $stats['last_run'] = $run;
+        if ($run['created'] > 0) {
+            $stats['last_new_at'] = now()->toIso8601String();
+        }
         $source->forceFill([
             'stats' => $stats,
             'last_run_at' => now(),
             'last_status' => $status,
         ])->save();
 
+        if ($run['created'] > 0) {
+            $this->announce($source, $run['created']);
+        }
+
         return $run + ['status' => $status];
     }
 
+    /** New companies found on a directory: the people who manage imports hear about it once per run. */
+    private function announce(ScrapeSource $source, int $created): void
+    {
+        try {
+            Notification::send(
+                User::permission('imports.manage')->get(),
+                new StaffAlert('directory', trans_choice('notifications.staff_directory_body', $created, ['count' => $created, 'source' => $source->name]), 'admin.discovery.new', ['source' => $source->id]),
+            );
+        } catch (Throwable $e) {
+            report($e);
+        }
+    }
+
     /** @return string one of created / merged / skipped / failed (for the run counters) */
-    private function process(ScrapeUrl $url, ScrapeSource $source, Fetcher $fetcher, array $selectors, array $options): string
+    private function process(ScrapeUrl $url, ScrapeSource $source, Fetcher $fetcher, array $selectors, array $options, ?\Closure $hasTime = null): string
     {
         $url->attempts++;
         $url->fetched_at = now();
@@ -108,6 +138,10 @@ final class DiscoveryRunner
             $result = $this->importer->import($extracted['record'], $source->sourceKey(), $options);
             $url->business_id = $result['business_id'];
 
+            if ($result['business_id'] && ($logo = $extracted['record']['logo_url'] ?? null) && (! $hasTime || $hasTime($fetcher->waitFor($logo)))) {
+                $this->adoptLogo((int) $result['business_id'], $logo, $fetcher);
+            }
+
             return $this->finish($url, 'done', $result['status'].($result['message'] ? ':'.$result['message'] : ''), $result['status']);
         } catch (DiscoveryException $e) {
             if ($e->retryable && $url->attempts < self::MAX_ATTEMPTS) {
@@ -124,6 +158,30 @@ final class DiscoveryRunner
             report($e);
 
             return $this->finish($url, $url->attempts < self::MAX_ATTEMPTS ? 'pending' : 'failed', Str::limit('error: '.$e->getMessage(), 250, ''), 'failed');
+        }
+    }
+
+    /**
+     * The company's own logo shown on the directory, for a listing that has none yet. Only an image
+     * that passes the logo checks is used; anything else (a banner, a tiny icon) is left alone.
+     */
+    private function adoptLogo(int $businessId, string $logoUrl, Fetcher $fetcher): void
+    {
+        $business = Business::query()->find($businessId);
+        if (! $business || $business->logo_path || $business->owner_id) {
+            return;
+        }
+        try {
+            // Images often live on the directory's CDN, so any public host is fine (still SSRF-checked).
+            $image = $fetcher->get($logoUrl);
+            $png = LogoFinder::accept($image->body);
+            if ($png !== null) {
+                $this->manager->setLogoPng($business, $png, ['origin' => 'directory', 'source_url' => $image->url]);
+            }
+        } catch (DiscoveryException) {
+            // The listing itself was imported; a missing logo is not a failure.
+        } catch (Throwable $e) {
+            report($e);
         }
     }
 

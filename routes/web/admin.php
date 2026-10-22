@@ -50,12 +50,15 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified', 'can:adm
         Route::get('/discovery/{source}/edit', [Admin\DiscoveryController::class, 'edit'])->name('discovery.edit');
         Route::put('/discovery/{source}', [Admin\DiscoveryController::class, 'update'])->name('discovery.update');
         Route::delete('/discovery/{source}', [Admin\DiscoveryController::class, 'destroy'])->name('discovery.destroy');
-        Route::post('/discovery/{source}/run', [Admin\DiscoveryController::class, 'run'])->middleware('throttle:30,1')->name('discovery.run');
+        Route::post('/discovery/{source}/run', [Admin\DiscoveryController::class, 'run'])->middleware('throttle:60,1')->name('discovery.run');
         Route::post('/discovery/test', [Admin\DiscoveryController::class, 'test'])->middleware('throttle:30,1')->name('discovery.test');
+        Route::post('/discovery/analyze', [Admin\DiscoveryController::class, 'analyze'])->middleware('throttle:20,1')->name('discovery.analyze');
+        Route::get('/discovery/{source}/new', [Admin\DiscoveryController::class, 'newCompanies'])->name('discovery.new');
 
         Route::get('/enrichment', [Admin\EnrichmentController::class, 'index'])->name('enrichment.index');
         Route::post('/enrichment/bulk', [Admin\EnrichmentController::class, 'bulk'])->middleware('throttle:120,1')->name('enrichment.bulk');
         Route::post('/enrichment/businesses/{business}', [Admin\EnrichmentController::class, 'business'])->whereNumber('business')->middleware('throttle:30,1')->name('enrichment.business');
+        Route::post('/enrichment/businesses/{business}/directory', [Admin\EnrichmentController::class, 'directory'])->whereNumber('business')->middleware('throttle:30,1')->name('enrichment.directory');
         Route::get('/enrichment/{suggestion}', [Admin\EnrichmentController::class, 'show'])->whereNumber('suggestion')->name('enrichment.show');
         Route::post('/enrichment/{suggestion}/approve', [Admin\EnrichmentController::class, 'approve'])->whereNumber('suggestion')->name('enrichment.approve');
         Route::post('/enrichment/{suggestion}/reject', [Admin\EnrichmentController::class, 'reject'])->whereNumber('suggestion')->name('enrichment.reject');
@@ -157,11 +160,13 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified', 'can:adm
     });
 
     Route::middleware('can:settings.manage')->group(function () {
+        Route::get('/adsense', [Admin\AdsenseController::class, 'index'])->middleware('throttle:30,1')->name('adsense.index');
         Route::get('/settings/{group?}', [Admin\SettingsController::class, 'edit'])->name('settings.edit');
         Route::put('/settings/{group}', [Admin\SettingsController::class, 'update'])->name('settings.update');
     });
 
     Route::get('/analytics', [Admin\AnalyticsController::class, 'index'])->middleware('can:analytics.view')->name('analytics.index');
+    Route::get('/analytics/realtime', [Admin\AnalyticsController::class, 'realtime'])->middleware(['can:analytics.view', 'throttle:120,1'])->name('analytics.realtime');
 
     Route::middleware('can:audit.view')->group(function () {
         Route::get('/audit-logs', [Admin\AuditLogController::class, 'index'])->name('audit.index');

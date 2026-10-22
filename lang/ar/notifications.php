@@ -32,6 +32,8 @@ return [
     'offer_rejected_body' => 'لم يُعتمد العرض «:offer».',
     'staff_claim_title' => 'طلب ملكية جديد',
     'staff_verification_title' => 'طلب توثيق جديد',
+    'staff_directory_title' => 'شركات جديدة',
+    'staff_directory_body' => '{1} :source: أُضيفت شركة جديدة واحدة للمراجعة.|[2,*] :source: أُضيفت :count شركات جديدة للمراجعة.',
     'staff_report_title' => 'بلاغ جديد',
     'staff_contact_title' => 'رسالة تواصل جديدة',
     'staff_contact_body' => 'رسالة جديدة من :name: :subject',

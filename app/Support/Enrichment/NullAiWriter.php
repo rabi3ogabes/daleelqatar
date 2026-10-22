@@ -17,7 +17,7 @@ final class NullAiWriter implements AiWriter
         return [];
     }
 
-    public function profileFromWebsite(string $name, ?string $category, array $pages): array
+    public function profileFromWebsite(string $name, ?string $category, array $pages, string $origin = 'website'): array
     {
         return ['found' => false, 'description_en' => null, 'description_ar' => null, 'tagline_en' => null, 'tagline_ar' => null, 'services' => []];
     }

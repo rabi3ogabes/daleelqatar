@@ -2,12 +2,19 @@
     $editing = $source->exists;
     $title = $editing ? $source->name : __('discovery.create_title');
     $settings = (array) $source->settings;
-    $fieldLabels = collect(['name_en', 'name_ar', 'categories', 'phone', 'email', 'website', 'social', 'address', 'city', 'coordinates', 'hours', 'description'])
+    $fieldLabels = collect(['name_en', 'name_ar', 'categories', 'phone', 'email', 'website', 'social', 'address', 'city', 'coordinates', 'hours', 'description', 'logo', 'image'])
         ->mapWithKeys(fn ($f) => [$f => __('discovery.result_fields.'.$f)])->all();
 @endphp
 <x-layouts.dashboard area="admin" :title="$title" :subtitle="__('discovery.form_subtitle')" :nav="\App\Support\AdminNavigation::for(auth()->user())"
     :breadcrumbs="[['label' => __('admin.nav.dashboard'), 'url' => route('admin.dashboard')], ['label' => __('discovery.title'), 'url' => route('admin.discovery.index')], ['label' => $title]]">
     <x-flash class="mb-5" />
+
+    @if($preset ?? false)
+        <div class="mb-5 flex items-start gap-3 rounded-2xl border border-gold-200 bg-gold-50/60 p-4 text-sm text-gold-900">
+            <x-icon name="sparkles" class="mt-0.5 size-5 shrink-0 text-gold-600" />
+            <p class="leading-6">{{ __('discovery.preset_loaded') }}</p>
+        </div>
+    @endif
 
     <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <form method="POST" action="{{ $editing ? route('admin.discovery.update', $source) : route('admin.discovery.store') }}" class="min-w-0 space-y-6">
@@ -22,6 +29,61 @@
                         :options="collect(\App\Http\Controllers\Admin\DiscoveryController::MODES)->mapWithKeys(fn ($m) => [$m => __('discovery.modes.'.$m)])->all()" :hint="__('discovery.hints.discovery')" />
                     <x-form.input name="url_pattern" dir="ltr" :label="__('discovery.fields.url_pattern')" :value="$source->url_pattern" :hint="__('discovery.hints.url_pattern')" placeholder="/company/[^/]+$" maxlength="500" />
                     <x-form.textarea name="start_urls" dir="ltr" rows="4" class="md:col-span-2" :label="__('discovery.fields.start_urls')" :value="$source->start_urls" :hint="__('discovery.hints.start_urls')" />
+                    <x-form.input name="search_url" dir="ltr" class="md:col-span-2" :label="__('discovery.fields.search_url')" :value="$settings['search_url'] ?? null" :hint="__('discovery.hints.search_url')" placeholder="https://example.qa/search?q={query}" maxlength="500" />
+                </div>
+
+                <div x-data="sourceAnalyzer(@js(['url' => route('admin.discovery.analyze')]))" class="mt-5 rounded-2xl border border-navy-100 bg-gradient-to-br from-navy-50/70 to-white p-4">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-navy-900 text-gold-300"><x-icon name="wand-sparkles" class="size-4.5" /></span>
+                        <div class="min-w-0 flex-1 text-sm">
+                            <p class="font-semibold text-navy-900">{{ __('discovery.analyze_title') }}</p>
+                            <p class="text-muted-strong">{{ __('discovery.analyze_hint') }}</p>
+                        </div>
+                        <button type="button" class="btn btn-outline shrink-0" @click="analyze()" :disabled="busy" data-no-busy>
+                            <x-icon name="scan-search" class="size-4" x-show="!busy" /><x-icon name="loader-circle" class="size-4 animate-spin" x-show="busy" x-cloak />
+                            <span x-text="busy ? @js(__('discovery.analyzing')) : @js(__('discovery.analyze_cta'))"></span>
+                        </button>
+                    </div>
+                    <p x-show="error" x-cloak class="mt-3 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger" x-text="error"></p>
+                    <template x-if="result">
+                        <div class="mt-4 space-y-3 border-t border-navy-100 pt-4 text-sm">
+                            <ol class="space-y-1.5">
+                                <template x-for="step in result.steps" :key="step.label">
+                                    <li class="flex items-start gap-2">
+                                        <span class="mt-0.5 flex size-4.5 shrink-0 items-center justify-center rounded-full" :class="step.ok ? 'bg-success text-white' : 'bg-navy-100 text-muted'">
+                                            <x-icon name="check" class="size-3" x-show="step.ok" /><x-icon name="minus" class="size-3" x-show="!step.ok" />
+                                        </span>
+                                        <span class="min-w-0"><span class="text-navy-900" x-text="step.label"></span>
+                                            <span x-show="step.detail" class="block truncate text-xs text-muted-strong" dir="ltr" x-text="step.detail"></span></span>
+                                    </li>
+                                </template>
+                            </ol>
+                            <template x-if="result.ok">
+                                <div class="rounded-xl bg-white p-3 ring-1 ring-navy-100">
+                                    <dl class="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1.5 text-xs">
+                                        <dt class="text-muted-strong">{{ __('discovery.fields.discovery') }}</dt><dd class="font-medium text-navy-900" x-text="result.mode_label"></dd>
+                                        <dt class="text-muted-strong">{{ __('discovery.fields.start_urls') }}</dt><dd class="break-all font-mono text-navy-900" dir="ltr" x-text="result.start_urls || '—'"></dd>
+                                        <dt class="text-muted-strong">{{ __('discovery.fields.url_pattern') }}</dt><dd class="font-mono text-navy-900" dir="ltr" x-text="result.url_pattern"></dd>
+                                        <template x-if="result.last_page"><dt class="text-muted-strong">{{ __('discovery.analyze_pages') }}</dt></template>
+                                        <template x-if="result.last_page"><dd class="tabular-nums text-navy-900" x-text="result.last_page.toLocaleString()"></dd></template>
+                                    </dl>
+                                    <template x-if="result.sample">
+                                        <div class="mt-3 flex gap-3 border-t border-navy-50 pt-3">
+                                            <template x-if="result.sample.fields.image"><img :src="result.sample.fields.image" alt="" class="size-16 shrink-0 rounded-lg object-cover ring-1 ring-navy-100" referrerpolicy="no-referrer" loading="lazy"></template>
+                                            <div class="min-w-0 text-xs">
+                                                <p class="font-semibold text-navy-900" x-text="result.sample.fields.name_en"></p>
+                                                <p class="text-muted-strong" x-text="[result.sample.fields.categories, result.sample.fields.phone, result.sample.fields.email].filter(Boolean).join(' · ')"></p>
+                                                <a :href="result.sample.url" target="_blank" rel="noopener noreferrer" class="mt-1 inline-flex items-center gap-1 text-gold-700 hover:underline">{{ __('discovery.analyze_sample') }} <x-icon name="external-link" class="size-3" /></a>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <button type="button" class="btn btn-primary btn-sm mt-3 w-full" @click="apply()" data-no-busy>
+                                        <x-icon name="check" class="size-3.5" /><span x-text="applied ? @js(__('discovery.analyze_applied')) : @js(__('discovery.analyze_apply'))"></span>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
                 </div>
             </x-dash.panel>
 
@@ -71,7 +133,12 @@
                                 <template x-for="(value, key) in result.fields" :key="key">
                                     <div class="grid grid-cols-[6.5rem_1fr] gap-2">
                                         <dt class="text-muted-strong" x-text="labels[key] || key"></dt>
-                                        <dd class="break-words font-medium text-navy-900" dir="auto" x-text="value"></dd>
+                                        <dd class="break-words font-medium text-navy-900" dir="auto">
+                                            <template x-if="key === 'logo' || key === 'image'">
+                                                <a :href="value" target="_blank" rel="noopener noreferrer"><img :src="value" alt="" class="max-h-28 rounded-lg object-contain ring-1 ring-navy-100" referrerpolicy="no-referrer" loading="lazy"></a>
+                                            </template>
+                                            <span x-show="key !== 'logo' && key !== 'image'" x-text="value"></span>
+                                        </dd>
                                     </div>
                                 </template>
                             </dl>
@@ -88,6 +155,7 @@
                     <li>{{ __('discovery.rules.delay') }}</li>
                     <li>{{ __('discovery.rules.ratings') }}</li>
                     <li>{{ __('discovery.rules.duplicates') }}</li>
+                    <li>{{ __('discovery.rules.wording') }}</li>
                 </ul>
             </div>
 

@@ -40,6 +40,10 @@ class CacheGuestPages
         'faq' => 3600,
         'privacy' => 3600,
         'terms' => 3600,
+        'cookies' => 3600,
+        'disclaimer' => 3600,
+        'editorial' => 3600,
+        'advertise' => 3600,
         'add-business' => 3600,
     ];
 

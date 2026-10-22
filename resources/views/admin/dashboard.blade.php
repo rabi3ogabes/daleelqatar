@@ -3,6 +3,43 @@
         @can('businesses.create')<a href="{{ route('admin.businesses.create') }}" class="btn btn-primary"><x-icon name="plus" class="size-4" />{{ __('admin.businesses.create') }}</a>@endcan
     </x-slot:actions>
 
+    {{-- Live visitors --}}
+    @can('analytics.view')
+        @php $live = app(\App\Support\Analytics\SiteAnalytics::class)->realtime(); @endphp
+        <a href="{{ route('admin.analytics.index') }}" class="group relative mb-4 flex flex-wrap items-center gap-x-6 gap-y-3 overflow-hidden rounded-2xl bg-navy-900 px-5 py-4 text-white shadow-soft transition hover:shadow-lift">
+            <div class="pattern-lattice absolute inset-0 opacity-30" aria-hidden="true"></div>
+            <span class="relative flex items-center gap-3">
+                <span class="relative flex size-3"><span class="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex size-3 rounded-full bg-emerald-400"></span></span>
+                <span class="text-sm font-semibold text-white/80">{{ __('analytics.live') }}</span>
+            </span>
+            <span class="relative text-3xl font-bold tabular-nums">{{ format_number($live['active']) }} <span class="text-sm font-normal text-white/60">{{ __('analytics.live_hint') }}</span></span>
+            <span class="relative hidden min-w-0 flex-1 items-end gap-[2px] sm:flex" style="height: 2rem" dir="ltr" aria-hidden="true">
+                @php $peak = max(1, max($live['minutes'])); @endphp
+                @foreach($live['minutes'] as $v)<span class="flex-1 rounded-t-sm {{ $v ? 'bg-gold-300/80' : 'bg-white/10' }}" style="height: {{ max(8, round(100 * $v / $peak)) }}%"></span>@endforeach
+            </span>
+            <span class="relative ms-auto inline-flex items-center gap-1 text-sm font-semibold text-gold-300 group-hover:underline">{{ __('analytics.open_analytics') }}<x-icon name="chevron-right" class="size-4" /></span>
+        </a>
+    @endcan
+
+    {{-- AdSense readiness --}}
+    @can('settings.manage')
+        @php $adsense = app(\App\Support\AdsenseReadiness::class)->report(); $open = $adsense['counts']['fail'] + $adsense['counts']['warn']; @endphp
+        @if($open > 0)
+            <a href="{{ route('admin.adsense.index') }}" class="card card-hover mb-4 flex flex-wrap items-center gap-4 px-5 py-4">
+                <span @class(['flex size-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold tabular-nums', 'bg-danger-soft text-danger' => $adsense['counts']['fail'] > 0, 'bg-warning-soft text-warning' => $adsense['counts']['fail'] === 0])>{{ $adsense['score'] }}%</span>
+                <span class="min-w-0 flex-1">
+                    <span class="block font-semibold text-navy-900">{{ __('adsense.widget_title') }} · {{ __('adsense.verdict.'.($adsense['counts']['fail'] === 0 ? 'almost' : ($adsense['counts']['fail'] <= 2 ? 'close' : 'work')).'.title') }}</span>
+                    <span class="block text-sm text-muted-strong">
+                        @if($adsense['counts']['fail']){{ trans_choice('adsense.counts.fail', $adsense['counts']['fail'], ['count' => $adsense['counts']['fail']]) }}@endif
+                        @if($adsense['counts']['fail'] && $adsense['counts']['warn']) · @endif
+                        @if($adsense['counts']['warn']){{ trans_choice('adsense.counts.warn', $adsense['counts']['warn'], ['count' => $adsense['counts']['warn']]) }}@endif
+                    </span>
+                </span>
+                <span class="inline-flex items-center gap-1 text-sm font-semibold text-gold-700">{{ __('adsense.widget_open') }}<x-icon name="chevron-right" class="size-4" /></span>
+            </a>
+        @endif
+    @endcan
+
     {{-- Key figures --}}
     <div class="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <x-dash.stat :label="__('admin.dashboard.total_businesses')" :value="$totals['businesses']" icon="store" :trend="$trends['businesses']" :sublabel="__('admin.dashboard.all_statuses')" :href="route('admin.businesses.index')" />

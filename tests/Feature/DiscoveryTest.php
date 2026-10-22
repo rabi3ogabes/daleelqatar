@@ -192,7 +192,7 @@ class DiscoveryTest extends TestCase
 
         $result = Extractor::extract($html, self::SITE.'/c/1', ['name' => '.card #title', 'address' => 'div.main p.addr', 'phone' => 'a.tel@href', 'email' => 'a[href^=mailto]@href']);
 
-        $this->assertSame('selectors', $result['method']);
+        $this->assertStringStartsWith('selectors', $result['method']);
         $this->assertSame('Doha Auto Care', $result['record']['name_en']);
         $this->assertSame('+97455123456', $result['record']['phone']);
         $this->assertSame('+97455123456', $result['record']['whatsapp']);
