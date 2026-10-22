@@ -45,6 +45,8 @@ return [
     'anthropic' => [
         'key' => env('ANTHROPIC_API_KEY'),
         'model' => env('ANTHROPIC_MODEL', 'claude-opus-5-5'),
+        // Quick, inexpensive model for interactive features (smart search).
+        'fast_model' => env('ANTHROPIC_FAST_MODEL', 'claude-haiku-5-5'),
         'base_url' => env('ANTHROPIC_BASE_URL'),
     ],
 

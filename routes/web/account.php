@@ -5,11 +5,16 @@ use App\Http\Controllers\Account\BusinessMediaController;
 use App\Http\Controllers\Account\ClaimController;
 use App\Http\Controllers\Account\DashboardController;
 use App\Http\Controllers\Account\FavoriteController;
+use App\Http\Controllers\Account\InsightsController;
+use App\Http\Controllers\Account\LeadController;
 use App\Http\Controllers\Account\NotificationController;
 use App\Http\Controllers\Account\OfferController;
+use App\Http\Controllers\Account\QuoteController;
 use App\Http\Controllers\Account\ReviewController;
 use App\Http\Controllers\Account\SettingsController;
+use App\Http\Controllers\Account\SpecialHoursController;
 use App\Http\Controllers\Account\VerificationController;
+use App\Http\Controllers\QrController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -40,6 +45,11 @@ Route::prefix('account')->name('account.')->middleware(['auth', 'verified'])->gr
         Route::post('/businesses/{business:uuid}/gallery/reorder', [BusinessMediaController::class, 'reorder'])->name('businesses.gallery.reorder');
     });
 
+    Route::get('/businesses/{business:uuid}/poster', [QrController::class, 'poster'])->name('businesses.poster');
+    Route::get('/businesses/{business:uuid}/qr.svg', [QrController::class, 'svg'])->name('businesses.qr');
+    Route::get('/businesses/{business:uuid}/insights', [InsightsController::class, 'show'])->name('businesses.insights');
+    Route::get('/businesses/{business:uuid}/special-hours', [SpecialHoursController::class, 'edit'])->name('businesses.special-hours');
+    Route::put('/businesses/{business:uuid}/special-hours/{period}', [SpecialHoursController::class, 'update'])->whereNumber('period')->name('businesses.special-hours.update');
     Route::get('/businesses/{business:uuid}/verification', [VerificationController::class, 'create'])->name('businesses.verification');
     Route::post('/businesses/{business:uuid}/verification', [VerificationController::class, 'store'])->middleware('throttle:submissions')->name('businesses.verification.store');
 
@@ -54,6 +64,15 @@ Route::prefix('account')->name('account.')->middleware(['auth', 'verified'])->gr
     Route::post('/reviews/{review:uuid}/reply', [ReviewController::class, 'reply'])->name('reviews.reply');
     Route::get('/my-reviews', [ReviewController::class, 'mine'])->name('my-reviews');
     Route::delete('/my-reviews/{review:uuid}', [ReviewController::class, 'destroy'])->name('my-reviews.destroy');
+
+    // Quote requests the user sent, and the ones their businesses received.
+    Route::get('/quotes', [QuoteController::class, 'index'])->name('quotes.index');
+    Route::get('/quotes/{quote:uuid}', [QuoteController::class, 'show'])->name('quotes.show');
+    Route::post('/quotes/{quote:uuid}/close', [QuoteController::class, 'close'])->name('quotes.close');
+    Route::get('/leads', [LeadController::class, 'index'])->name('leads.index');
+    Route::get('/leads/{lead}', [LeadController::class, 'show'])->whereNumber('lead')->name('leads.show');
+    Route::post('/leads/{lead}/reply', [LeadController::class, 'reply'])->whereNumber('lead')->middleware('throttle:30,1')->name('leads.reply');
+    Route::post('/leads/{lead}/decline', [LeadController::class, 'decline'])->whereNumber('lead')->name('leads.decline');
 
     Route::get('/favorites', [FavoriteController::class, 'index'])->name('favorites');
     Route::get('/claims', [ClaimController::class, 'index'])->name('claims.index');

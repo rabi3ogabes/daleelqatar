@@ -39,4 +39,9 @@ return [
     'active_filters' => 'Active filters',
     'error_title' => 'We could not load results',
     'meta_description' => 'Search Daleel Qatar for businesses and services by category and area.',
+    'smart' => [
+        'understood' => 'Showing',
+        'exact' => 'Search exactly for “:query” instead',
+        'broadened' => 'No listing matched “:words” exactly, so here is everything that matches the rest of your search.',
+    ],
 ];

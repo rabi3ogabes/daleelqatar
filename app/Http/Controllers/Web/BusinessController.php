@@ -9,6 +9,7 @@ use App\Enums\ReportReason;
 use App\Http\Controllers\Controller;
 use App\Models\Business;
 use App\Models\Review;
+use App\Models\SeasonalPeriod;
 use App\Services\AnalyticsRecorder;
 use App\Services\ClaimService;
 use App\Services\ReviewService;
@@ -34,6 +35,8 @@ class BusinessController extends Controller
         $business->load([
             'category.parent', 'categories', 'municipality', 'area', 'images', 'services', 'openingHours', 'socialLinks',
             'activeOffers' => fn ($q) => $q->orderBy('ends_at'),
+            'specialHours' => fn ($q) => $q->whereIn('seasonal_period_id', SeasonalPeriod::query()->upcoming()->select('id')),
+            'specialHours.period',
         ]);
 
         $user = auth()->user();
@@ -202,6 +205,15 @@ class BusinessController extends Controller
                 'opens' => substr((string) $h->opens_at, 0, 5),
                 'closes' => str_starts_with((string) $h->closes_at, '24') ? '23:59' : substr((string) $h->closes_at, 0, 5),
             ])->values()->all() ?: null,
+            // Ramadan / holiday hours the business set, valid only for the season's dates.
+            'specialOpeningHoursSpecification' => $business->relationLoaded('specialHours') ? ($business->specialHours->map(fn ($h) => [
+                '@type' => 'OpeningHoursSpecification',
+                'dayOfWeek' => $days[$h->day_of_week],
+                'opens' => $h->is_closed ? '00:00' : substr((string) $h->opens_at, 0, 5),
+                'closes' => $h->is_closed ? '00:00' : (str_starts_with((string) $h->closes_at, '24') ? '23:59' : substr((string) $h->closes_at, 0, 5)),
+                'validFrom' => $h->period?->starts_on->toDateString(),
+                'validThrough' => $h->period?->ends_on->toDateString(),
+            ])->values()->all() ?: null) : null,
             'sameAs' => $business->socialLinks->pluck('url')->all() ?: null,
             // Only real, moderated ratings are exposed to search engines.
             'aggregateRating' => $business->reviews_count > 0 ? [

@@ -6,9 +6,11 @@ namespace App\Support;
 
 use App\Models\Business;
 use App\Models\Category;
+use App\Models\Guide;
 use App\Models\Municipality;
 use App\Models\Offer;
 use App\Models\Page;
+use App\Support\Guides\GuideBuilder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -105,6 +107,17 @@ final class Sitemap
             }
             Page::query()->where('is_published', true)->whereIn('slug', ['privacy', 'terms', 'cookies', 'disclaimer', 'editorial', 'advertise'])->get()
                 ->each(fn ($p) => $add($p->slug, [], $p->updated_at, '0.2'));
+            // Guides: only those search engines may index (enough listings and the editor's own introduction).
+            $builder = app(GuideBuilder::class);
+            $guides = Guide::query()->published()->get();
+            if ($guides->isNotEmpty()) {
+                $add('guides.index', [], $guides->max('updated_at'), '0.6');
+            }
+            $guides->each(function ($g) use ($add, $builder) {
+                if ($builder->indexable($g, $builder->listings($g)->count())) {
+                    $add('guides.show', ['guide' => $g->slug], $g->updated_at, '0.7');
+                }
+            });
         } elseif ($name === 'taxonomy') {
             $rootCounts = Directory::categoryCounts();
             $subCounts = self::businessQuery(quality: false)->selectRaw('businesses.category_id, COUNT(*) AS total')

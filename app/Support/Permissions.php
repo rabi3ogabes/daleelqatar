@@ -42,6 +42,7 @@ final class Permissions
         'content.manage', 'messages.manage',
         'settings.manage', 'analytics.view', 'audit.view',
         'imports.manage',
+        'quotes.manage', 'guides.manage',
     ];
 
     /** @return array<string, list<string>> */
@@ -53,7 +54,7 @@ final class Permissions
             self::MODERATOR => [
                 'admin.access', 'businesses.view', 'businesses.update', 'businesses.moderate',
                 'claims.review', 'reviews.moderate', 'reports.handle', 'offers.moderate',
-                'messages.manage', 'analytics.view',
+                'messages.manage', 'analytics.view', 'quotes.manage',
             ],
             self::BUSINESS_OWNER => [],
             self::USER => [],

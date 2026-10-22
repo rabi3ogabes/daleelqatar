@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace App\Support\Search;
 
 use App\Contracts\BusinessSearchEngine;
+use App\Models\Area;
 use App\Models\Business;
 use App\Models\Category;
+use App\Models\Municipality;
+use App\Support\Directory;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -17,7 +20,7 @@ final class PostgresBusinessSearch implements BusinessSearchEngine
         $query = Business::query()
             ->published()
             ->select('businesses.*')
-            ->with(['category:id,name_ar,name_en,slug,icon', 'municipality:id,name_ar,name_en,slug', 'area:id,name_ar,name_en,slug,municipality_id', 'images' => fn ($q) => $q->limit(1), 'openingHours']);
+            ->with(['category:id,name_ar,name_en,slug,icon', 'municipality:id,name_ar,name_en,slug', 'area:id,name_ar,name_en,slug,municipality_id', 'images' => fn ($q) => $q->limit(1), 'openingHours', ...Directory::seasonRelation()]);
 
         $tsQuery = null;
         $normalized = null;
@@ -35,11 +38,11 @@ final class PostgresBusinessSearch implements BusinessSearchEngine
                 ->pluck('id')->all();
 
             // Searching a place name ("Lusail", "الوكرة") returns businesses located there.
-            $areaIds = \App\Models\Area::query()->active()
+            $areaIds = Area::query()->active()
                 ->where(fn (Builder $w) => $w->whereRaw(ArabicNormalizer::sql('name_ar').' ILIKE ?', [$like])
                     ->orWhereRaw(ArabicNormalizer::sql('name_en').' ILIKE ?', [$like]))
                 ->pluck('id')->all();
-            $municipalityIds = \App\Models\Municipality::query()->active()
+            $municipalityIds = Municipality::query()->active()
                 ->where(fn (Builder $w) => $w->whereRaw(ArabicNormalizer::sql('name_ar').' ILIKE ?', [$like])
                     ->orWhereRaw(ArabicNormalizer::sql('name_en').' ILIKE ?', [$like]))
                 ->pluck('id')->all();
@@ -66,7 +69,7 @@ final class PostgresBusinessSearch implements BusinessSearchEngine
 
             $query->selectRaw(
                 '('.($tsQuery ? "ts_rank(businesses.search_vector, to_tsquery('simple', ?)) * 2 + " : '').
-                "word_similarity(?, businesses.search_document) + CASE WHEN businesses.is_verified THEN 0.05 ELSE 0 END) AS relevance",
+                'word_similarity(?, businesses.search_document) + CASE WHEN businesses.is_verified THEN 0.05 ELSE 0 END) AS relevance',
                 $tsQuery ? [$tsQuery, $normalized] : [$normalized]
             );
         }

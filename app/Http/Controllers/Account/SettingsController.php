@@ -17,7 +17,7 @@ use Illuminate\View\View;
 
 class SettingsController extends Controller
 {
-    public const PREFERENCES = ['email', 'listing_updates', 'reviews'];
+    public const PREFERENCES = ['email', 'listing_updates', 'reviews', 'quotes', 'monthly_report'];
 
     public function edit(Request $request): View
     {

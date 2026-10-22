@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Enums\BusinessStatus;
+use App\Models\SeasonalPeriod;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -20,7 +21,16 @@ final class Directory
             'area:id,name_ar,name_en,slug,municipality_id',
             'openingHours',
             'images' => fn ($q) => $q->limit(1),
+            ...self::seasonRelation(),
         ];
+    }
+
+    /** Special hours of the season running today, eager-loaded so "open now" on cards needs no extra queries. */
+    public static function seasonRelation(): array
+    {
+        $ids = SeasonalPeriod::current()->pluck('id')->all();
+
+        return $ids ? ['specialHours' => fn ($q) => $q->whereIn('seasonal_period_id', $ids)] : [];
     }
 
     /** Published businesses per ROOT category (sub-category listings roll up). @return array<int,int> */

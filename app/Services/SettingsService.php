@@ -103,12 +103,21 @@ class SettingsService
             'integrations.google_cache_hours' => ['group' => 'integrations', 'type' => 'integer', 'value' => 24],
             'integrations.ai_assistant' => ['group' => 'integrations', 'type' => 'boolean', 'value' => true],
             'integrations.enrichment_daily' => ['group' => 'integrations', 'type' => 'integer', 'value' => 0],
+
+            // Quote requests, smart search and owner reports
+            'quotes.enabled' => ['group' => 'growth', 'type' => 'boolean', 'value' => true],
+            'quotes.max_recipients' => ['group' => 'growth', 'type' => 'integer', 'value' => 5],
+            'quotes.expiry_days' => ['group' => 'growth', 'type' => 'integer', 'value' => 14],
+            'quotes.daily_limit' => ['group' => 'growth', 'type' => 'integer', 'value' => 5],
+            'search.smart' => ['group' => 'growth', 'type' => 'boolean', 'value' => true],
+            'search.smart_ai' => ['group' => 'growth', 'type' => 'boolean', 'value' => true],
+            'insights.monthly_email' => ['group' => 'growth', 'type' => 'boolean', 'value' => true],
         ];
     }
 
     public static function groups(): array
     {
-        return ['brand', 'home', 'contact', 'moderation', 'uploads', 'notifications', 'seo', 'integrations'];
+        return ['brand', 'home', 'contact', 'moderation', 'uploads', 'notifications', 'seo', 'integrations', 'growth'];
     }
 
     public function all(): array

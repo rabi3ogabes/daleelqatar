@@ -128,8 +128,18 @@ class BusinessManager
     public function syncHours(Business $business, array $hours): void
     {
         $business->openingHours()->delete();
+        $business->openingHours()->createMany(self::hoursRows($hours));
+        $business->unsetRelation('openingHours');
+    }
+
+    /** Rows for opening_hours / special_hours from the hours editor's input. */
+    public static function hoursRows(array $hours): array
+    {
         $rows = [];
         foreach ($hours as $day => $config) {
+            if (! is_numeric($day)) {
+                continue;
+            }
             $day = (int) $day;
             if ($day < 0 || $day > 6 || ! is_array($config)) {
                 continue;
@@ -150,8 +160,8 @@ class BusinessManager
                 }
             }
         }
-        $business->openingHours()->createMany($rows);
-        $business->unsetRelation('openingHours');
+
+        return $rows;
     }
 
     public function syncServices(Business $business, array $services): void

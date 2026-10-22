@@ -12,18 +12,46 @@ use App\Support\Directory;
 use App\Support\NavigationData;
 use App\Support\Search\ArabicNormalizer;
 use App\Support\Search\SearchCriteria;
+use App\Support\Search\SmartQuery;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class SearchController extends Controller
 {
-    public function index(Request $request, BusinessSearchEngine $engine, AnalyticsRecorder $analytics, NavigationData $nav): View
+    public function index(Request $request, BusinessSearchEngine $engine, AnalyticsRecorder $analytics, NavigationData $nav, SmartQuery $smart): View|RedirectResponse
     {
         $criteria = SearchCriteria::fromRequest($request);
+
+        // Smart search: a plain sentence becomes the matching filters ("pharmacy open now in Al Wakrah").
+        if ($criteria->query !== null && SmartQuery::enabled() && ! $request->boolean('exact') && ! $request->filled('understood')
+            && ! $request->filled('category') && ! $request->filled('municipality') && ! $request->filled('area') && ! $request->boolean('open_now') && ! $request->boolean('verified')) {
+            $meaning = $smart->interpret($criteria->query);
+            if ($meaning?->understood()) {
+                return redirect()->route('search', $meaning->toQuery($criteria->query) + array_filter(['view' => $request->query('view')]));
+            }
+        }
+
         $results = $engine->search($criteria);
+        $understood = $request->filled('understood') ? mb_substr(trim((string) $request->query('understood')), 0, 120) : null;
+        $broadened = null;
+        // Words left over from a smart search ("kids") narrowed it to nothing: show the understood filters alone.
+        if ($understood !== null && $results->total() === 0 && $criteria->query !== null && $criteria->hasFilters()) {
+            $broadened = $criteria->query;
+            $criteria = $criteria->withoutQuery();
+            $results = $engine->search($criteria);
+        }
+        // Nothing with the understood filters: the words exactly as typed, if they find something.
+        if ($understood !== null && $results->total() === 0) {
+            $exact = new SearchCriteria(query: $understood, perPage: $criteria->perPage, page: $criteria->page);
+            $exactResults = $engine->search($exact);
+            if ($exactResults->total() > 0) {
+                [$criteria, $results, $understood, $broadened] = [$exact, $exactResults, null, null];
+            }
+        }
         $analytics->recordSearch($criteria, $results->total());
 
         $title = $criteria->query ? __('search.results_for', ['query' => $criteria->query]) : __('search.title');
@@ -38,6 +66,8 @@ class SearchController extends Controller
             'hasRatings' => DB::table('businesses')->whereNotNull('rating_avg')->exists(),
             'layout' => $request->query('view') === 'list' ? 'list' : 'grid',
             'favoriteIds' => Directory::favoriteIds(),
+            'understood' => $understood,
+            'broadened' => $broadened,
         ]);
     }
 

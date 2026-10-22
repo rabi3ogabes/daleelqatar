@@ -28,6 +28,7 @@ class CronMaintenanceTest extends TestCase
     {
         config(['security.cron_secret' => 'cron-test-secret']);
         Cache::forget('sitemap.xml');
+        $this->travelTo(now()->startOfMonth()->addDays(14)); // mid-month: no monthly report run
 
         $this->withHeader('Authorization', 'Bearer cron-test-secret')
             ->get('/cron/maintenance')
@@ -41,11 +42,22 @@ class CronMaintenanceTest extends TestCase
                     'auth:clear-resets' => 'ok',
                     'model:prune' => 'ok',
                     'analytics:prune' => 'ok',
+                    'seasons:remind' => 'ok',
+                    'quotes:expire' => 'ok',
                     'categories:check' => 'ok',
                 ],
             ]);
 
         $this->assertTrue(Cache::has('sitemap.xml'));
+    }
+
+    public function test_first_week_of_the_month_sends_the_owner_reports(): void
+    {
+        config(['security.cron_secret' => 'cron-test-secret']);
+        $this->travelTo(now()->startOfMonth()->addDays(1));
+
+        $this->withHeader('Authorization', 'Bearer cron-test-secret')->get('/cron/maintenance')
+            ->assertOk()->assertJsonPath('commands.daleel:insights-report', 'ok');
     }
 
     public function test_robots_txt_keeps_crawlers_out_of_the_cron_endpoint(): void

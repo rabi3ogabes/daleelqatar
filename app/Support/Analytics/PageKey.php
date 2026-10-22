@@ -21,6 +21,7 @@ final class PageKey
         'categories.show' => ['category', 'category'],
         'locations.show' => ['municipality', 'location'],
         'offers.show' => ['offer', 'offer'],
+        'guides.show' => ['guide', 'guide'],
         'pages.show' => ['page', 'page'],
         'directory.az.letter' => ['letter', 'az'],
     ];

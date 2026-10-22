@@ -100,7 +100,7 @@
         @endif
 
         @if($results->isNotEmpty())
-            <div @class(['grid gap-5 sm:grid-cols-2 xl:grid-cols-3' => $layout === 'grid', 'grid gap-4' => $layout === 'list'])>
+            <div @class(['grid gap-5 sm:grid-cols-2 xl:grid-cols-3' => $layout === 'grid', 'grid gap-4' => $layout === 'list']) data-impressions="{{ \App\Support\Insights\Impressions::payload($results->getCollection()->pluck('id')) }}">
                 @foreach($results as $business)
                     <x-business-card :business="$business" :layout="$layout" :favorited="in_array($business->id, $favoriteIds, true)" :eager="$loop->index < 3" />
                 @endforeach

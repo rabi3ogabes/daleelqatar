@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 
 class Business extends Model
 {
@@ -141,6 +142,16 @@ class Business extends Model
         return $this->hasMany(OpeningHour::class)->orderBy('day_of_week')->orderBy('opens_at');
     }
 
+    public function specialHours(): HasMany
+    {
+        return $this->hasMany(SpecialHour::class)->orderBy('day_of_week')->orderBy('opens_at');
+    }
+
+    public function quoteRecipients(): HasMany
+    {
+        return $this->hasMany(QuoteRecipient::class);
+    }
+
     public function socialLinks(): HasMany
     {
         return $this->hasMany(BusinessSocialLink::class);
@@ -235,30 +246,48 @@ class Business extends Model
                 ->whereIn('business_category.category_id', $ids)));
     }
 
-    /** Businesses open right now in Qatar time, including periods that run past midnight. */
+    /**
+     * Businesses open right now in Qatar time, including periods that run past midnight.
+     * While a season (Ramadan, Eid…) runs, a business's special hours replace its regular ones.
+     */
     public function scopeOpenNow(Builder $q, ?CarbonImmutable $at = null): Builder
     {
         $now = ($at ?? CarbonImmutable::now(self::TIMEZONE))->setTimezone(self::TIMEZONE);
         $day = $now->dayOfWeek;
         $prev = ($day + 6) % 7;
         $time = $now->format('H:i:s');
+        $seasonIds = SeasonalPeriod::current($now)->pluck('id')->all();
 
-        return $q->whereExists(function ($s) use ($day, $prev, $time) {
-            $s->selectRaw('1')->from('opening_hours as oh')
-                ->whereColumn('oh.business_id', 'businesses.id')
-                ->where('oh.is_closed', false)
-                ->where(function ($w) use ($day, $prev, $time) {
-                    $w->where(fn ($a) => $a->where('oh.day_of_week', $day)
-                        ->whereColumn('oh.opens_at', '<=', 'oh.closes_at')
-                        ->where('oh.opens_at', '<=', $time)->where('oh.closes_at', '>', $time))
-                        ->orWhere(fn ($b) => $b->where('oh.day_of_week', $day)
-                            ->whereColumn('oh.opens_at', '>', 'oh.closes_at')
-                            ->where('oh.opens_at', '<=', $time))
-                        ->orWhere(fn ($c) => $c->where('oh.day_of_week', $prev)
-                            ->whereColumn('oh.opens_at', '>', 'oh.closes_at')
-                            ->where('oh.closes_at', '>', $time));
-                });
-        });
+        $openIn = function (string $table, ?array $periods) use ($day, $prev, $time) {
+            return function ($s) use ($table, $periods, $day, $prev, $time) {
+                $s->selectRaw('1')->from($table.' as oh')
+                    ->whereColumn('oh.business_id', 'businesses.id')
+                    ->when($periods !== null, fn ($w) => $w->whereIn('oh.seasonal_period_id', $periods))
+                    ->where('oh.is_closed', false)
+                    ->where(function ($w) use ($day, $prev, $time) {
+                        $w->where(fn ($a) => $a->where('oh.day_of_week', $day)
+                            ->whereColumn('oh.opens_at', '<=', 'oh.closes_at')
+                            ->where('oh.opens_at', '<=', $time)->where('oh.closes_at', '>', $time))
+                            ->orWhere(fn ($b) => $b->where('oh.day_of_week', $day)
+                                ->whereColumn('oh.opens_at', '>', 'oh.closes_at')
+                                ->where('oh.opens_at', '<=', $time))
+                            ->orWhere(fn ($c) => $c->where('oh.day_of_week', $prev)
+                                ->whereColumn('oh.opens_at', '>', 'oh.closes_at')
+                                ->where('oh.closes_at', '>', $time));
+                    });
+            };
+        };
+
+        if ($seasonIds === []) {
+            return $q->whereExists($openIn('opening_hours', null));
+        }
+
+        return $q->where(fn (Builder $w) => $w
+            ->whereExists($openIn('special_hours', $seasonIds))
+            ->orWhere(fn (Builder $r) => $r
+                ->whereNotExists(fn ($s) => $s->selectRaw('1')->from('special_hours as sh')
+                    ->whereColumn('sh.business_id', 'businesses.id')->whereIn('sh.seasonal_period_id', $seasonIds))
+                ->whereExists($openIn('opening_hours', null))));
     }
 
     // ------------------------------------------------------------------ helpers
@@ -280,7 +309,55 @@ class Business extends Model
 
     public function hasOpeningHours(): bool
     {
+        if ($this->seasonalHours() !== null) {
+            return true;
+        }
+
         return $this->relationLoaded('openingHours') ? $this->openingHours->isNotEmpty() : $this->openingHours()->exists();
+    }
+
+    /** @var array{0: ?SeasonalPeriod, 1: ?Collection}|null */
+    private ?array $seasonCache = null;
+
+    /** The season running today for which this business set special hours (null when none). */
+    public function currentSeason(): ?SeasonalPeriod
+    {
+        return $this->seasonState()[0];
+    }
+
+    /** Special hours replacing the regular ones today, or null. */
+    public function seasonalHours(): ?Collection
+    {
+        return $this->seasonState()[1];
+    }
+
+    /** The hours that apply today: a season's special hours, otherwise the regular week. */
+    public function effectiveHours(): Collection
+    {
+        return $this->seasonalHours() ?? $this->openingHours;
+    }
+
+    /** @return array{0: ?SeasonalPeriod, 1: ?Collection} */
+    private function seasonState(): array
+    {
+        if ($this->seasonCache !== null) {
+            return $this->seasonCache;
+        }
+        $periods = SeasonalPeriod::current();
+        if ($periods->isEmpty() || ! $this->exists) {
+            return $this->seasonCache = [null, null];
+        }
+        $rows = $this->relationLoaded('specialHours')
+            ? $this->specialHours->whereIn('seasonal_period_id', $periods->pluck('id')->all())
+            : $this->specialHours()->whereIn('seasonal_period_id', $periods->pluck('id')->all())->get();
+        foreach ($periods as $period) {
+            $own = $rows->where('seasonal_period_id', $period->id)->values();
+            if ($own->isNotEmpty()) {
+                return $this->seasonCache = [$period, $own];
+            }
+        }
+
+        return $this->seasonCache = [null, null];
     }
 
     /** null when no reliable hours exist. */
@@ -295,7 +372,7 @@ class Business extends Model
         $day = $now->dayOfWeek;
         $prev = ($day + 6) % 7;
 
-        foreach ($this->openingHours as $h) {
+        foreach ($this->effectiveHours() as $h) {
             if ($h->is_closed || ! $h->opens_at || ! $h->closes_at) {
                 continue;
             }

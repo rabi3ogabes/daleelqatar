@@ -67,6 +67,13 @@ final class SearchCriteria
         );
     }
 
+    /** The same search without its free text (used when understood filters alone find results). */
+    public function withoutQuery(): self
+    {
+        return new self(null, $this->category, $this->municipality, $this->area, $this->verifiedOnly, $this->minRating,
+            $this->openNow, $this->featuredOnly, $this->sort === 'relevance' ? 'relevance' : $this->sort, $this->perPage, $this->page);
+    }
+
     public function hasFilters(): bool
     {
         return $this->query !== null || $this->category || $this->municipality || $this->area

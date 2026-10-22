@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin;
+use App\Http\Controllers\QrController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -27,6 +28,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified', 'can:adm
         Route::post('/businesses/{business:id}/logo', [Admin\BusinessController::class, 'logo'])->middleware('can:businesses.update')->name('businesses.logo');
         Route::post('/businesses/{business:id}/logo/find', [Admin\LogoController::class, 'find'])->middleware(['can:businesses.update', 'throttle:20,1'])->name('businesses.logo.find');
         Route::post('/businesses/{business:id}/logo/apply', [Admin\LogoController::class, 'apply'])->middleware(['can:businesses.update', 'throttle:30,1'])->name('businesses.logo.apply');
+        Route::get('/businesses/{business:id}/poster', [QrController::class, 'adminPoster'])->name('businesses.poster');
+        Route::get('/businesses/{business:id}/qr.svg', [QrController::class, 'svg'])->middleware('can:businesses.update')->name('businesses.qr');
+        Route::get('/businesses/{business:id}/special-hours', [Admin\SpecialHoursController::class, 'edit'])->middleware('can:businesses.update')->name('businesses.special-hours');
+        Route::put('/businesses/{business:id}/special-hours/{period}', [Admin\SpecialHoursController::class, 'update'])->whereNumber('period')->middleware('can:businesses.update')->name('businesses.special-hours.update');
         Route::post('/businesses/{business:id}/cover', [Admin\BusinessController::class, 'cover'])->middleware('can:businesses.update')->name('businesses.cover');
         Route::post('/businesses/{business:id}/gallery', [Admin\BusinessController::class, 'gallery'])->middleware('can:businesses.update')->name('businesses.gallery');
         Route::delete('/businesses/{business:id}/gallery/{image}', [Admin\BusinessController::class, 'destroyImage'])->middleware('can:businesses.update')->name('businesses.gallery.destroy');
@@ -150,6 +155,22 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified', 'can:adm
         Route::resource('banners', Admin\BannerController::class)->except('show');
         Route::get('/homepage', [Admin\HomepageController::class, 'edit'])->name('homepage.edit');
         Route::put('/homepage', [Admin\HomepageController::class, 'update'])->name('homepage.update');
+    });
+
+    Route::middleware('can:quotes.manage')->group(function () {
+        Route::get('/quotes', [Admin\QuoteController::class, 'index'])->name('quotes.index');
+        Route::get('/quotes/{quote:uuid}', [Admin\QuoteController::class, 'show'])->name('quotes.show');
+        Route::post('/quotes/{quote:uuid}/remove', [Admin\QuoteController::class, 'remove'])->name('quotes.remove');
+    });
+
+    Route::middleware('can:guides.manage')->group(function () {
+        Route::get('/guides/suggestions', [Admin\GuideController::class, 'suggestions'])->name('guides.suggestions');
+        Route::get('/guides/preview', [Admin\GuideController::class, 'preview'])->middleware('throttle:60,1')->name('guides.preview');
+        Route::resource('guides', Admin\GuideController::class)->except('show');
+    });
+
+    Route::middleware('can:content.manage')->group(function () {
+        Route::resource('seasons', Admin\SeasonController::class)->except('show');
     });
 
     Route::middleware('can:messages.manage')->group(function () {

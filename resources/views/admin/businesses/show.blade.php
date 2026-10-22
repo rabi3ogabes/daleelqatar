@@ -20,7 +20,11 @@
     <x-slot:actions>
         @if($business->isPublished())
             <a href="{{ route('business.show', $business) }}" target="_blank" class="btn btn-outline"><x-icon name="external-link" class="size-4" />{{ __('admin.businesses.view_public') }}</a>
+            <a href="{{ route('admin.businesses.poster', $business->id) }}" class="btn btn-outline" title="{{ __('poster.card_title') }}"><x-icon name="qr-code" class="size-4" /><span class="hidden lg:inline">{{ __('poster.title') }}</span></a>
         @endif
+        @can('businesses.update')@unless($business->trashed())
+            <a href="{{ route('admin.businesses.special-hours', $business->id) }}" class="btn btn-outline" title="{{ __('seasons.owner.card_title') }}"><x-icon name="moon" class="size-4" /><span class="hidden lg:inline">{{ __('seasons.owner.short') }}</span></a>
+        @endunless @endcan
         @can('businesses.update')@unless($business->trashed())
             <a href="{{ route('admin.businesses.edit', $business->id) }}" class="btn btn-primary"><x-icon name="pencil" class="size-4" />{{ __('common.edit') }}</a>
         @endunless @endcan
