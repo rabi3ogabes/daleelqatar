@@ -135,6 +135,82 @@ final class ClaudeAiWriter implements AiWriter
         ];
     }
 
+    public function categorize(array $businesses, array $taxonomy): array
+    {
+        if ($businesses === [] || $taxonomy === []) {
+            return [];
+        }
+
+        $slugs = array_keys($taxonomy);
+        $lines = array_map(fn ($b) => json_encode([
+            'id' => $b['id'],
+            'name' => $b['name'],
+            'name_ar' => $b['name_ar'],
+            'source_categories' => array_slice($b['labels'], 0, 12),
+            'services' => $b['services'] ? mb_substr($b['services'], 0, 300) : null,
+            'description' => $b['description'] ? mb_substr($b['description'], 0, 500) : null,
+        ], JSON_UNESCAPED_UNICODE), $businesses);
+
+        $taxonomyText = implode("\n", array_map(fn ($slug, $label) => "{$slug} — {$label}", $slugs, $taxonomy));
+
+        $data = $this->json(
+            system: <<<'TXT'
+            You sort businesses in Qatar into the categories of a business directory.
+            Choose only from the taxonomy given (use the slug). Pick the most specific category for the business's main activity:
+            - The business name and its own description are the strongest evidence.
+            - "source_categories" come from other directories; they are often generic ("Business", "Services", "Hotels and Restaurants") or wrong, so use them only when they fit the name and description.
+            - Many legal names in Qatar end in "Trading & Contracting W.L.L." — that alone says little; look for the actual activity.
+            - Add up to two secondary categories only when the business clearly also works in them.
+            - If the evidence does not show what the business does, answer "other-businesses" with a low confidence.
+            confidence: 0–100, how sure you are of the main category.
+            reason_en: one short sentence naming the evidence. reason_ar: the same sentence in Arabic.
+            Never invent facts about a business.
+            TXT,
+            user: "Taxonomy (slug — section › category):\n{$taxonomyText}\n\nBusinesses (JSON lines):\n".implode("\n", $lines),
+            schema: [
+                'type' => 'object',
+                'properties' => [
+                    'results' => ['type' => 'array', 'items' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'id' => ['type' => 'integer'],
+                            'category' => ['type' => 'string', 'enum' => $slugs],
+                            'secondary' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => $slugs]],
+                            'confidence' => ['type' => 'integer'],
+                            'reason_en' => ['type' => 'string'],
+                            'reason_ar' => ['type' => 'string'],
+                        ],
+                        'required' => ['id', 'category', 'secondary', 'confidence', 'reason_en', 'reason_ar'],
+                        'additionalProperties' => false,
+                    ]],
+                ],
+                'required' => ['results'],
+                'additionalProperties' => false,
+            ],
+            effort: 'low',
+            maxTokens: 12000,
+        );
+
+        $out = [];
+        $ids = array_column($businesses, 'id');
+        foreach ((array) ($data['results'] ?? []) as $row) {
+            $id = (int) ($row['id'] ?? 0);
+            $category = (string) ($row['category'] ?? '');
+            if (! in_array($id, $ids, true) || ! isset($taxonomy[$category])) {
+                continue;
+            }
+            $out[$id] = [
+                'category' => $category,
+                'secondary' => array_values(array_slice(array_filter((array) ($row['secondary'] ?? []), fn ($s) => isset($taxonomy[$s]) && $s !== $category), 0, 2)),
+                'confidence' => max(0, min(100, (int) ($row['confidence'] ?? 0))),
+                'reason_en' => mb_substr(trim((string) ($row['reason_en'] ?? '')), 0, 240),
+                'reason_ar' => mb_substr(trim((string) ($row['reason_ar'] ?? '')), 0, 240),
+            ];
+        }
+
+        return $out;
+    }
+
     private function json(string $system, string $user, array $schema, string $effort, int $maxTokens): array
     {
         try {

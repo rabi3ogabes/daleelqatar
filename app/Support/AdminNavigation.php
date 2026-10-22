@@ -8,6 +8,7 @@ use App\Enums\BusinessStatus;
 use App\Enums\ModerationStatus;
 use App\Enums\OfferStatus;
 use App\Enums\RequestStatus;
+use App\Models\CategoryReview;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,7 @@ final class AdminNavigation
                 $can('imports.manage') ? ['label' => __('imports.nav.discovery'), 'route' => 'admin.discovery.index', 'icon' => 'radar', 'pattern' => 'admin.discovery.*'] : null,
                 $can('imports.manage') ? ['label' => __('enrichment.nav'), 'route' => 'admin.enrichment.index', 'icon' => 'sparkles', 'pattern' => 'admin.enrichment.*', 'badge' => $b['enrichment']] : null,
                 $can('categories.manage') ? ['label' => __('admin.nav.categories'), 'route' => 'admin.categories.index', 'icon' => 'folder-tree', 'pattern' => 'admin.categories.*'] : null,
+                $can('businesses.update') ? ['label' => __('category_review.nav'), 'route' => 'admin.category-review.index', 'icon' => 'layers', 'pattern' => 'admin.category-review.*', 'badge' => $b['categories']] : null,
                 $can('locations.manage') ? ['label' => __('admin.nav.locations'), 'route' => 'admin.municipalities.index', 'icon' => 'map-pin', 'pattern' => ['admin.municipalities.*', 'admin.areas.*']] : null,
                 $can('offers.moderate') ? ['label' => __('admin.nav.offers'), 'route' => 'admin.offers.index', 'icon' => 'tag', 'pattern' => 'admin.offers.*', 'badge' => $b['offers']] : null,
             ]))],
@@ -77,6 +79,7 @@ final class AdminNavigation
             'reports' => DB::table('listing_reports')->where('status', 'open')->count() + DB::table('review_reports')->where('status', 'open')->count(),
             'messages' => DB::table('contact_messages')->where('status', 'new')->count(),
             'enrichment' => DB::table('business_suggestions')->where('status', 'pending')->count(),
+            'categories' => DB::table('category_reviews')->where('status', 'pending')->whereNotNull('suggested_category_id')->where('confidence', '>=', CategoryReview::HIGH)->count(),
         ]);
     }
 

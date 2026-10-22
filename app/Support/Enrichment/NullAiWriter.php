@@ -21,4 +21,9 @@ final class NullAiWriter implements AiWriter
     {
         return ['found' => false, 'description_en' => null, 'description_ar' => null, 'tagline_en' => null, 'tagline_ar' => null, 'services' => []];
     }
+
+    public function categorize(array $businesses, array $taxonomy): array
+    {
+        return [];
+    }
 }

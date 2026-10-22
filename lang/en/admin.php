@@ -619,6 +619,7 @@ return [
             'business_verified' => 'Business verified',
             'business_unverified' => 'Verification revoked',
             'business_owner_changed' => 'Business owner changed',
+            'business_category_changed' => 'Category changed',
             'business_logo_updated' => 'Logo updated',
             'business_cover_updated' => 'Cover updated',
             'business_gallery_added' => 'Gallery photos added',

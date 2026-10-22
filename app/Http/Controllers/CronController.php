@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\ScrapeSource;
+use App\Support\Categories\CategoryReviewer;
 use App\Support\Discovery\DiscoveryRunner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,6 +49,15 @@ class CronController extends Controller
                 report($e);
                 $results[$command] = 'failed';
             }
+        }
+
+        // New listings get their category checked (suggestions wait for an admin in Smart categories).
+        try {
+            app(CategoryReviewer::class)->scan('unchecked', 0, useAi: true, budgetSeconds: 8.0, limit: 2000);
+            $results['categories:check'] = 'ok';
+        } catch (Throwable $e) {
+            report($e);
+            $results['categories:check'] = 'failed';
         }
 
         // Optional daily enrichment (Admin → Settings → Google & integrations); suggestions still need approval.

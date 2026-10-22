@@ -69,6 +69,17 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified', 'can:adm
         Route::get('/claims/{claim}/proof', [Admin\ClaimController::class, 'proof'])->name('claims.proof');
     });
 
+    // Smart categories: check every listing's category and apply corrections.
+    Route::middleware('can:businesses.update')->group(function () {
+        Route::get('/categories/review', [Admin\CategoryReviewController::class, 'index'])->name('category-review.index');
+        Route::post('/categories/review/scan', [Admin\CategoryReviewController::class, 'scan'])->middleware('throttle:240,1')->name('category-review.scan');
+        Route::post('/categories/review/apply-confident', [Admin\CategoryReviewController::class, 'applyConfident'])->middleware('throttle:120,1')->name('category-review.apply-confident');
+        Route::post('/categories/review/bulk', [Admin\CategoryReviewController::class, 'bulk'])->name('category-review.bulk');
+        Route::post('/categories/review/{review}/apply', [Admin\CategoryReviewController::class, 'apply'])->whereNumber('review')->name('category-review.apply');
+        Route::post('/categories/review/{review}/keep', [Admin\CategoryReviewController::class, 'keep'])->whereNumber('review')->name('category-review.keep');
+        Route::post('/businesses/{business}/check-category', [Admin\CategoryReviewController::class, 'check'])->whereNumber('business')->middleware('throttle:30,1')->name('category-review.check');
+    });
+
     Route::middleware('can:businesses.verify')->group(function () {
         Route::get('/verifications', [Admin\VerificationController::class, 'index'])->name('verifications.index');
         Route::get('/verifications/{verification}', [Admin\VerificationController::class, 'show'])->name('verifications.show');
