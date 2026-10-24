@@ -1336,4 +1336,396 @@ Alpine.data('nameReview', (cfg) => ({
     },
 }));
 
+/* Google Maps finder ----------------------------------------------------------- */
+Alpine.data('placeFinder', (cfg) => {
+    // Leaflet objects stay outside Alpine's reactive proxies.
+    let map = null;
+    const BULK_CHUNK = 4;
+
+    return {
+        cfg,
+        keyword: '',
+        mode: 'area',
+        municipalityId: '',
+        areaId: '',
+        lat: null,
+        lng: null,
+        radius: cfg.radius,
+        searching: false,
+        searched: false,
+        error: '',
+        query: '',
+        rows: [],
+        next: null,
+        loadingMore: false,
+        filter: 'all',
+        hideClosed: true,
+        categoryFor: {},
+        editingCategory: null,
+        rowState: {},
+        selected: {},
+        publish: true,
+        busy: false,
+        stopping: false,
+        progress: { done: 0, total: 0 },
+        summary: '',
+        highlight: null,
+        lastParams: null,
+        modal: { open: false, row: null, form: {}, saving: false, error: '', duplicate: null, force: false },
+
+        init() {
+            this.$nextTick(async () => {
+                try {
+                    const { createFinderMap } = await import('./places-map');
+                    map = createFinderMap(this.$refs.map, {
+                        rtl: document.documentElement.dir === 'rtl',
+                        labels: cfg.i18n.states,
+                        onPick: (lat, lng) => this.setPoint(lat, lng),
+                        onSelect: (id) => this.reveal(id),
+                    });
+                    map.setPicking(this.mode === 'point');
+                } catch (e) {
+                    this.$refs.map.classList.add('hidden');
+                }
+            });
+            this.$watch('mode', (mode) => {
+                map?.setPicking(mode === 'point');
+                if (mode !== 'point') map?.clearPoint();
+                else if (this.lat !== null) map?.setPoint(this.lat, this.lng, this.radius);
+            });
+            this.$watch('radius', () => this.lat !== null && map?.setPoint(this.lat, this.lng, this.radius));
+            this.$watch('municipalityId', () => (this.areaId = ''));
+        },
+
+        get areas() {
+            return this.cfg.areas[this.municipalityId] || [];
+        },
+
+        quick(label) {
+            this.keyword = label;
+            this.$refs.keyword?.focus();
+        },
+
+        setPoint(lat, lng) {
+            this.lat = Math.round(lat * 1e6) / 1e6;
+            this.lng = Math.round(lng * 1e6) / 1e6;
+            this.error = '';
+            map?.setPoint(this.lat, this.lng, this.radius);
+        },
+
+        locate() {
+            if (!navigator.geolocation) {
+                this.error = this.cfg.i18n.locationFailed;
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (pos) => this.setPoint(pos.coords.latitude, pos.coords.longitude),
+                () => (this.error = this.cfg.i18n.locationFailed),
+                { enableHighAccuracy: true, timeout: 10000 },
+            );
+        },
+
+        params() {
+            const p = { keyword: this.keyword.trim(), mode: this.mode };
+            if (this.mode === 'point') Object.assign(p, { lat: this.lat, lng: this.lng, radius: Number(this.radius) });
+            else Object.assign(p, { municipality_id: this.municipalityId || null, area_id: this.areaId || null });
+            return p;
+        },
+
+        async search() {
+            if (this.searching || this.busy) return;
+            this.error = '';
+            if (this.keyword.trim().length < 2) {
+                this.error = this.cfg.i18n.keywordRequired;
+                this.$refs.keyword?.focus();
+                return;
+            }
+            if (this.mode === 'point' && this.lat === null) {
+                this.error = this.cfg.i18n.pinRequired;
+                return;
+            }
+            this.searching = true;
+            this.lastParams = this.params();
+            try {
+                const data = await postJson(this.cfg.urls.search, this.lastParams);
+                this.query = data.query;
+                this.rows = [];
+                this.rowState = {};
+                this.selected = {};
+                this.categoryFor = {};
+                this.summary = '';
+                this.filter = 'all';
+                this.append(data.rows);
+                this.next = data.next;
+                this.searched = true;
+                map?.setResults(this.rows);
+                this.$nextTick(() => this.$refs.results?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+            } catch (e) {
+                this.error = e.message || this.cfg.i18n.network;
+            } finally {
+                this.searching = false;
+            }
+        },
+
+        async more() {
+            if (!this.next || this.loadingMore) return;
+            this.loadingMore = true;
+            try {
+                const data = await postJson(this.cfg.urls.search, { ...this.lastParams, page_token: this.next });
+                const added = this.append(data.rows);
+                added.forEach((row) => map?.addResult(row));
+                this.next = data.next;
+            } catch (e) {
+                this.error = e.message || this.cfg.i18n.network;
+            } finally {
+                this.loadingMore = false;
+            }
+        },
+
+        append(rows) {
+            const known = new Set(this.rows.map((r) => r.place_id));
+            const fresh = rows.filter((r) => !known.has(r.place_id));
+            fresh.forEach((r) => {
+                this.categoryFor[r.place_id] = r.category_id;
+                if (r.business_status === 'CLOSED_PERMANENTLY' && r.state === 'new') r.state = 'closed';
+            });
+            this.rows.push(...fresh);
+            return fresh;
+        },
+
+        group(row) {
+            if (this.rowState[row.place_id]?.status === 'added') return 'listed';
+            return { new: 'new', closed: 'new', likely: 'matched', possible: 'matched', linked: 'listed' }[row.state];
+        },
+
+        isClosed(row) {
+            return row.business_status === 'CLOSED_PERMANENTLY';
+        },
+
+        count(group) {
+            return this.rows.filter((r) => !(this.hideClosed && this.isClosed(r)) && (group === 'all' || this.group(r) === group)).length;
+        },
+
+        get visible() {
+            return this.rows.filter((r) => !(this.hideClosed && this.isClosed(r)) && (this.filter === 'all' || this.group(r) === this.filter));
+        },
+
+        stateOf(row) {
+            return this.rowState[row.place_id]?.status === 'added' ? 'added' : row.state;
+        },
+
+        categoryName(id) {
+            return this.cfg.categoryNames[id] || '';
+        },
+
+        isFallback(row) {
+            return Number(this.categoryFor[row.place_id]) === this.cfg.fallbackCategory;
+        },
+
+        reasonLabels(row) {
+            return (row.reasons || []).filter((r) => this.cfg.i18n.reasons[r]).map((r) => ({ key: r, label: this.cfg.i18n.reasons[r], good: ['name_exact', 'phone_match', 'website_match', 'location_match', 'area_match', 'place_linked'].includes(r) }));
+        },
+
+        domain(url) {
+            return (url || '').replace(/^https?:\/\/(www\.)?/, '').replace(/\/.*$/, '');
+        },
+
+        plural(forms, n) {
+            const form = n === 1 ? forms.one : n === 2 ? forms.two : n >= 3 && n <= 10 ? forms.few : forms.many;
+            return form.replace(':count', n.toLocaleString());
+        },
+
+        reviewsLabel(n) {
+            return this.plural(this.cfg.i18n.reviews, n);
+        },
+
+        reveal(id) {
+            const row = this.rows.find((r) => r.place_id === id);
+            if (!row) return;
+            if (!this.visible.includes(row)) {
+                this.filter = 'all';
+                if (this.isClosed(row)) this.hideClosed = false;
+            }
+            this.highlight = id;
+            this.$nextTick(() => document.getElementById(`place-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+            setTimeout(() => this.highlight === id && (this.highlight = null), 2200);
+        },
+
+        showOnMap(row) {
+            map?.focus(row.place_id);
+            this.$refs.map?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        },
+
+        // Selection: only new places can be added in bulk.
+        selectable(row) {
+            return row.state === 'new' && !this.rowState[row.place_id];
+        },
+        get selectedIds() {
+            return Object.keys(this.selected).filter((id) => this.selected[id]);
+        },
+        get selectableVisible() {
+            return this.visible.filter((r) => this.selectable(r));
+        },
+        get allNewSelected() {
+            const rows = this.selectableVisible;
+            return rows.length > 0 && rows.every((r) => this.selected[r.place_id]);
+        },
+        toggleAllNew(on) {
+            this.selectableVisible.forEach((r) => (this.selected[r.place_id] = on));
+        },
+        clearSelection() {
+            this.selected = {};
+        },
+
+        // Add one place, after the admin checked it.
+        openAdd(row, force = false) {
+            this.modal = {
+                open: true,
+                row,
+                force,
+                saving: false,
+                error: '',
+                duplicate: null,
+                form: {
+                    name_en: row.name,
+                    name_ar: '',
+                    category_id: this.categoryFor[row.place_id] || '',
+                    municipality_id: row.municipality_id || '',
+                    area_id: row.area_id || '',
+                    phone: row.phone || '',
+                    website: row.website || '',
+                    address_en: row.address || '',
+                    hours: true,
+                    publish: this.publish,
+                },
+            };
+        },
+        get modalAreas() {
+            return this.cfg.areas[this.modal.form.municipality_id] || [];
+        },
+        closeModal() {
+            if (!this.modal.saving) this.modal.open = false;
+        },
+        async saveAdd(force = this.modal.force) {
+            const { row, form } = this.modal;
+            this.modal.saving = true;
+            this.modal.error = '';
+            this.modal.duplicate = null;
+            try {
+                const payload = { place_id: row.place_id, ...form, force };
+                ['category_id', 'municipality_id', 'area_id'].forEach((k) => (payload[k] = payload[k] === '' ? null : Number(payload[k])));
+                const data = await postJson(this.cfg.urls.add, payload);
+                this.markAdded(row, data.business);
+                this.modal.open = false;
+                Alpine.store('toast').show(data.message);
+            } catch (e) {
+                if (e.status === 409 && e.data?.business) this.modal.duplicate = e.data.business;
+                else this.modal.error = e.message || this.cfg.i18n.network;
+            } finally {
+                this.modal.saving = false;
+            }
+        },
+        markAdded(row, business) {
+            this.rowState[row.place_id] = { status: 'added', business };
+            delete this.selected[row.place_id];
+            map?.setState(row.place_id, 'added');
+        },
+
+        // Compare a listing with Google: what differs goes to the enrichment review screen.
+        async compare(row, businessId) {
+            const id = businessId || row.business?.id;
+            if (!id) return;
+            this.modal.open = false;
+            this.rowState[row.place_id] = { status: 'comparing' };
+            try {
+                const data = await postJson(this.cfg.urls.review, { business_id: id, place_id: row.place_id });
+                this.rowState[row.place_id] = data.status === 'review'
+                    ? { status: 'review', url: data.url, count: data.count }
+                    : { status: 'same', message: data.message };
+            } catch (e) {
+                this.rowState[row.place_id] = { status: 'error', message: e.message || this.cfg.i18n.network };
+            }
+        },
+        reviewLabel(n) {
+            return this.plural(this.cfg.i18n.updates, n);
+        },
+
+        // Bulk add with the categories chosen in the list.
+        get percent() {
+            return this.progress.total ? Math.round((this.progress.done / this.progress.total) * 100) : 0;
+        },
+        bulkAdd() {
+            const count = this.selectedIds.length;
+            if (!count || this.busy) return;
+            const store = Alpine.store('confirm');
+            store.ask(null, {
+                title: this.cfg.i18n.confirmTitle,
+                message: `${this.cfg.i18n.confirmText.replace(':count', count)} ${this.publish ? this.cfg.i18n.confirmPublish : this.cfg.i18n.confirmDraft}`,
+                confirmLabel: this.cfg.i18n.add,
+                tone: 'primary',
+            });
+            store.onAccept = () => this.runBulk();
+        },
+        async runBulk() {
+            let queue = this.selectedIds.slice();
+            const tally = { added: 0, duplicates: 0, failed: 0 };
+            this.busy = true;
+            this.stopping = false;
+            this.summary = '';
+            this.progress = { done: 0, total: queue.length };
+            let retries = 0;
+            while (queue.length && !this.stopping) {
+                const chunk = queue.slice(0, BULK_CHUNK);
+                try {
+                    const data = await postJson(this.cfg.urls.addMany, {
+                        items: chunk.map((id) => ({ place_id: id, category_id: Number(this.categoryFor[id]) || null })),
+                        publish: this.publish,
+                    });
+                    const results = data.results || [];
+                    if (!results.length) {
+                        if (++retries > 2) {
+                            this.summary = this.cfg.i18n.noProgress;
+                            break;
+                        }
+                        continue;
+                    }
+                    retries = 0;
+                    results.forEach((r) => {
+                        const row = this.rows.find((x) => x.place_id === r.place_id);
+                        if (r.status === 'added') {
+                            tally.added++;
+                            if (row) this.markAdded(row, r.business);
+                        } else if (r.status === 'duplicate') {
+                            tally.duplicates++;
+                            if (row) {
+                                row.state = 'possible';
+                                row.business = r.business;
+                                row.reasons = [];
+                                map?.setState(row.place_id, 'possible');
+                            }
+                            delete this.selected[r.place_id];
+                        } else {
+                            tally.failed++;
+                            if (row) this.rowState[row.place_id] = { status: 'error', message: r.message };
+                            delete this.selected[r.place_id];
+                        }
+                    });
+                    const done = new Set(results.map((r) => r.place_id));
+                    queue = queue.filter((id) => !done.has(id));
+                    this.progress.done = this.progress.total - queue.length;
+                } catch (e) {
+                    if (++retries > 2 || [401, 403, 419, 422].includes(e.status)) {
+                        this.summary = e.message || this.cfg.i18n.network;
+                        break;
+                    }
+                    await new Promise((r) => setTimeout(r, 1200 * retries));
+                }
+            }
+            this.busy = false;
+            const done = this.cfg.i18n.done.replace(':added', tally.added).replace(':duplicates', tally.duplicates).replace(':failed', tally.failed);
+            this.summary = this.summary ? `${done} · ${this.summary}` : done;
+        },
+    };
+});
+
 Alpine.start();

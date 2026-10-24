@@ -9,6 +9,7 @@ use App\Models\BusinessSource;
 use App\Models\BusinessSuggestion;
 use App\Models\Category;
 use App\Models\ScrapeSource;
+use App\Services\BusinessManager;
 use App\Support\Deadline;
 use App\Support\Discovery\DiscoveryException;
 use App\Support\Import\BusinessImporter;
@@ -36,11 +37,13 @@ final class Enricher
     ) {}
 
     /**
-     * @param  array{google?: bool, website?: bool, ai?: bool}  $options
+     * Option "compare" also offers the Google values that differ from the listing (left unticked for the admin).
+     *
+     * @param  array{google?: bool, website?: bool, ai?: bool, compare?: bool}  $options
      */
     public function run(Business $business, array $options = [], ?string $placeId = null): BusinessSuggestion
     {
-        $options += ['google' => true, 'website' => true, 'ai' => true];
+        $options += ['google' => true, 'website' => true, 'ai' => true, 'compare' => false];
         $business->loadMissing(['category', 'municipality', 'area', 'openingHours', 'services', 'socialLinks']);
 
         $fields = [];
@@ -56,13 +59,19 @@ final class Enricher
                 [$place, $match] = $this->findPlace($business, $placeId);
                 if ($place !== null) {
                     $sources[] = 'google';
-                    $this->fromGoogle($business, $place, $match, $fields);
+                    $this->fromGoogle($business, $place, $match, $fields, (bool) $options['compare']);
                 } else {
                     $notes['google'] = 'no_match';
                 }
             } catch (EnrichmentException $e) {
+                // A comparison is only about Google: its caller reports the problem.
+                if ($options['compare']) {
+                    throw $e;
+                }
                 $notes['google'] = $e->getMessage();
             }
+        } elseif ($options['compare']) {
+            throw new EnrichmentException('google_not_configured');
         } elseif ($options['google']) {
             $notes['google'] = 'google_not_configured';
         }
@@ -132,7 +141,8 @@ final class Enricher
             }
         }
 
-        return $this->store($business, $fields, $match, array_values(array_unique($sources)), $notes, $websiteStatus);
+        // A comparison adds to the suggestion already waiting (its Google values win) and is not a full check.
+        return $this->store($business, $fields, $match, array_values(array_unique($sources)), $notes, $websiteStatus, merge: (bool) $options['compare'], prefer: (bool) $options['compare']);
     }
 
     private function fromSnapshots(Business $business, array &$fields, array &$notes, array &$sources): void
@@ -381,59 +391,106 @@ final class Enricher
         ];
     }
 
-    private function fromGoogle(Business $business, array $place, array $match, array &$fields): void
+    private function fromGoogle(Business $business, array $place, array $match, array &$fields, bool $compare = false): void
     {
         $confidence = $match['score'] >= 80 ? 'high' : 'medium';
         $id = (string) data_get($place, 'id');
+        // A value that differs from what the listing already shows is offered only when comparing, never ticked by default.
+        $differs = fn (mixed $value, mixed $current, string $note = 'google_differs') => $this->field($value, $current, 'google', 'low', $note);
 
         if ($business->google_place_id !== $id) {
             $fields['google_place'] = $this->field(['place_id' => $id, 'maps_url' => $match['maps_url']], $business->google_maps_url, 'google', $confidence, 'google_listing');
         }
 
         // Arabic name and address as Google shows them to Arabic-speaking users.
-        if (! Normalizer::hasArabic((string) $business->name_ar) || blank($business->address_ar)) {
+        if ($compare || ! Normalizer::hasArabic((string) $business->name_ar) || blank($business->address_ar)) {
             try {
                 $arabic = $this->google->details($id, 'ar', ['displayName', 'formattedAddress']);
                 $nameAr = trim((string) data_get($arabic, 'displayName.text'));
-                if (! Normalizer::hasArabic((string) $business->name_ar) && Normalizer::hasArabic($nameAr)) {
-                    $fields['name_ar'] = $this->field($nameAr, $business->name_ar, 'google', $confidence, 'google_arabic_name');
+                if (Normalizer::hasArabic($nameAr)) {
+                    if (! Normalizer::hasArabic((string) $business->name_ar)) {
+                        $fields['name_ar'] = $this->field($nameAr, $business->name_ar, 'google', $confidence, 'google_arabic_name');
+                    } elseif ($compare && Normalizer::nameKey($nameAr) !== Normalizer::nameKey($business->name_ar)) {
+                        $fields['name_ar'] = $differs($nameAr, $business->name_ar);
+                    }
                 }
-                $addressAr = trim((string) data_get($arabic, 'formattedAddress'));
-                if (blank($business->address_ar) && Normalizer::hasArabic($addressAr)) {
-                    $fields['address_ar'] = $this->field(mb_substr($addressAr, 0, 300), null, 'google', $confidence);
+                $addressAr = mb_substr(trim((string) data_get($arabic, 'formattedAddress')), 0, 300);
+                if (Normalizer::hasArabic($addressAr)) {
+                    if (blank($business->address_ar)) {
+                        $fields['address_ar'] = $this->field($addressAr, null, 'google', $confidence);
+                    } elseif ($compare && self::differentText($addressAr, $business->address_ar)) {
+                        $fields['address_ar'] = $differs($addressAr, $business->address_ar);
+                    }
                 }
             } catch (EnrichmentException) {
                 // The English details are still useful.
             }
         }
 
-        if (blank($business->address_en) && ($address = trim((string) data_get($place, 'formattedAddress'))) !== '') {
-            $fields['address_en'] = $this->field(mb_substr($address, 0, 300), null, 'google', $confidence);
+        if (($address = mb_substr(trim((string) data_get($place, 'formattedAddress')), 0, 300)) !== '') {
+            if (blank($business->address_en)) {
+                $fields['address_en'] = $this->field($address, null, 'google', $confidence);
+            } elseif ($compare && self::differentText($address, $business->address_en)) {
+                $fields['address_en'] = $differs($address, $business->address_en);
+            }
         }
 
         $phone = Normalizer::phone((string) (data_get($place, 'internationalPhoneNumber') ?: data_get($place, 'nationalPhoneNumber')));
         if ($phone !== null && blank($business->phone)) {
             $fields['phone'] = $this->field(Normalizer::displayPhone($phone), null, 'google', $confidence);
+        } elseif ($phone !== null && $compare) {
+            $known = array_filter(array_map(fn ($p) => Normalizer::phone((string) $p), [$business->phone, $business->whatsapp, ...(array) $business->extra_phones]));
+            if (! in_array($phone, $known, true)) {
+                $fields['phone'] = $differs(Normalizer::displayPhone($phone), $business->phone, 'google_phone_differs');
+            }
         }
 
         $website = Normalizer::website((string) data_get($place, 'websiteUri'));
-        if ($website !== null && blank($business->website) && Normalizer::domain($website) !== null) {
-            $fields['website'] = $this->field($website, null, 'google', $confidence);
+        if ($website !== null && Normalizer::domain($website) !== null) {
+            if (blank($business->website)) {
+                $fields['website'] = $this->field($website, null, 'google', $confidence);
+            } elseif ($compare && Normalizer::domain($website) !== Normalizer::domain($business->website)) {
+                $fields['website'] = $differs($website, $business->website);
+            }
         }
 
         $lat = data_get($place, 'location.latitude');
         $lng = data_get($place, 'location.longitude');
-        if (is_numeric($lat) && is_numeric($lng) && ($business->latitude === null || $business->geo_precision !== 'exact')) {
-            $fields['location'] = $this->field(['lat' => round((float) $lat, 7), 'lng' => round((float) $lng, 7)],
-                $business->latitude !== null ? $business->latitude.', '.$business->longitude : null, 'google', $confidence);
-        }
-
-        if ($business->openingHours->isEmpty() && blank($business->opening_hours_text)) {
-            $hours = self::hoursFromGoogle((array) data_get($place, 'regularOpeningHours.periods', []));
-            if ($hours !== []) {
-                $fields['opening_hours'] = $this->field(['days' => $hours, 'lines' => array_values((array) data_get($place, 'regularOpeningHours.weekdayDescriptions', []))], null, 'google', $confidence);
+        if (is_numeric($lat) && is_numeric($lng)) {
+            $point = ['lat' => round((float) $lat, 7), 'lng' => round((float) $lng, 7)];
+            $current = $business->latitude !== null ? $business->latitude.', '.$business->longitude : null;
+            if ($business->latitude === null || $business->geo_precision !== 'exact') {
+                $fields['location'] = $this->field($point, $current, 'google', $confidence);
+            } elseif ($compare && PlaceMatcher::distanceKm((float) $business->latitude, (float) $business->longitude, $point['lat'], $point['lng']) > 0.15) {
+                $fields['location'] = $differs($point, $current, 'google_location_differs');
             }
         }
+
+        $hours = self::hoursFromGoogle((array) data_get($place, 'regularOpeningHours.periods', []));
+        if ($hours !== []) {
+            $value = ['days' => $hours, 'lines' => array_values((array) data_get($place, 'regularOpeningHours.weekdayDescriptions', []))];
+            if ($business->openingHours->isEmpty() && blank($business->opening_hours_text)) {
+                $fields['opening_hours'] = $this->field($value, null, 'google', $confidence);
+            } elseif ($compare && $business->openingHours->isNotEmpty() && self::hoursSignature(BusinessManager::hoursRows($hours)) !== self::hoursSignature($business->openingHours->toArray())) {
+                $fields['opening_hours'] = $differs($value, null, 'google_hours_differ');
+            }
+        }
+    }
+
+    private static function differentText(string $a, ?string $b): bool
+    {
+        $norm = fn (?string $v) => preg_replace('/[^\p{L}\p{N}]+/u', '', mb_strtolower((string) $v));
+
+        return $norm($a) !== $norm($b);
+    }
+
+    /** Opening hours in a comparable form, whatever their source. @param list<array<string,mixed>> $rows */
+    private static function hoursSignature(array $rows): string
+    {
+        $lines = array_map(fn ($r) => (int) $r['day_of_week'].'|'.(! empty($r['is_closed']) ? 'closed' : substr((string) $r['opens_at'], 0, 5).'-'.substr((string) $r['closes_at'], 0, 5)), $rows);
+        sort($lines);
+
+        return implode(',', $lines);
     }
 
     private function fromWebsite(Business $business, array $site, array $candidate, array &$fields, array &$notes, bool $useAi): void
@@ -487,14 +544,17 @@ final class Enricher
         }
     }
 
-    private function store(Business $business, array $fields, ?array $match, array $sources, array $notes, ?string $websiteStatus, bool $merge = false): BusinessSuggestion
+    private function store(Business $business, array $fields, ?array $match, array $sources, array $notes, ?string $websiteStatus, bool $merge = false, bool $prefer = false): BusinessSuggestion
     {
-        return DB::transaction(function () use ($business, $fields, $match, $sources, $notes, $websiteStatus, $merge) {
+        return DB::transaction(function () use ($business, $fields, $match, $sources, $notes, $websiteStatus, $merge, $prefer) {
             // A partial check (one directory) adds to the suggestion already waiting, instead of replacing it.
             $waiting = $merge ? BusinessSuggestion::query()->where('business_id', $business->id)->pending()->latest('id')->lockForUpdate()->first() : null;
             if ($waiting !== null) {
+                if ($prefer && $match !== null) {
+                    $waiting->forceFill(['match' => $match, 'match_confidence' => $match['score'] ?? null]);
+                }
                 $waiting->forceFill([
-                    'fields' => self::ordered((array) $waiting->fields + $fields),
+                    'fields' => self::ordered($prefer ? $fields + (array) $waiting->fields : (array) $waiting->fields + $fields),
                     'sources' => array_values(array_unique([...(array) $waiting->sources, ...$sources])),
                     'notes' => array_merge((array) $waiting->notes, $notes) ?: null,
                 ])->save();
