@@ -187,25 +187,7 @@ class PlaceFinderController extends Controller
 
     public static function googleMessage(EnrichmentException $e): string
     {
-        $code = $e->getMessage();
-        if (str_starts_with($code, 'google_error:')) {
-            $status = substr($code, 13);
-
-            return __('places.errors.google_'.match ($status) {
-                'PERMISSION_DENIED' => 'denied',
-                'RESOURCE_EXHAUSTED' => 'quota',
-                'INVALID_ARGUMENT' => 'invalid',
-                default => 'failed',
-            });
-        }
-
-        return __(match ($code) {
-            'google_not_configured' => 'places.errors.not_configured',
-            'google_unreachable' => 'places.errors.google_unreachable',
-            'google_out_of_time' => 'places.errors.out_of_time',
-            'google_place_not_found', 'invalid_place_id' => 'places.errors.place_gone',
-            default => 'places.errors.google_failed',
-        });
+        return GooglePlaces::problem($e->getMessage());
     }
 
     private function googleError(EnrichmentException $e): JsonResponse
