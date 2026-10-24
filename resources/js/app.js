@@ -1134,4 +1134,206 @@ Alpine.data('guideEditor', (state, areas) => ({
     },
 }));
 
+/* Admin enrichment: review suggested Arabic names in bulk ---------------------------------------
+   Select rows (shift-click selects a range), the whole page, or every matching row across all
+   pages; edit a name inline; approve or reject. Work runs in short server steps with progress. */
+const ARABIC = /[؀-ۿ]/;
+Alpine.data('nameReview', (cfg) => ({
+    cfg,
+    selected: {},
+    allMatching: false,
+    excluded: {},
+    edits: {},
+    errors: {},
+    state: {},
+    doneAction: {},
+    busy: false,
+    stopping: false,
+    action: 'approve',
+    progress: { processed: 0, total: 0 },
+    summary: '',
+    lastIndex: null,
+    get openRows() {
+        return this.cfg.rows.filter((r) => this.state[r.id] !== 'done');
+    },
+    get pageAll() {
+        const open = this.openRows;
+        return open.length > 0 && open.every((r) => this.isSelected(r.id));
+    },
+    get pageSome() {
+        return this.openRows.some((r) => this.isSelected(r.id));
+    },
+    get count() {
+        if (this.allMatching) return Math.max(0, this.cfg.total - Object.keys(this.excluded).length - this.doneCount);
+        return Object.keys(this.selected).length;
+    },
+    get doneCount() {
+        return Object.keys(this.state).filter((id) => this.state[id] === 'done').length;
+    },
+    get percent() {
+        return this.progress.total ? Math.min(100, Math.round((this.progress.processed / this.progress.total) * 100)) : 0;
+    },
+    isSelected(id) {
+        if (this.state[id] === 'done') return false;
+        return this.allMatching ? !this.excluded[id] : !!this.selected[id];
+    },
+    setSelected(id, on) {
+        if (this.allMatching) {
+            if (on) delete this.excluded[id];
+            else this.excluded[id] = true;
+        } else if (on) this.selected[id] = true;
+        else delete this.selected[id];
+    },
+    toggle(id, index, event) {
+        const on = !this.isSelected(id);
+        // Shift-click selects (or clears) every row between the last click and this one.
+        if (event.shiftKey && this.lastIndex !== null) {
+            const [from, to] = [Math.min(this.lastIndex, index), Math.max(this.lastIndex, index)];
+            this.cfg.rows.slice(from, to + 1).forEach((r) => this.state[r.id] !== 'done' && this.setSelected(r.id, on));
+        } else {
+            this.setSelected(id, on);
+        }
+        this.lastIndex = index;
+        this.summary = '';
+    },
+    togglePage(on) {
+        this.openRows.forEach((r) => this.setSelected(r.id, on));
+        if (!on && this.allMatching) this.clear();
+        this.summary = '';
+    },
+    selectAllMatching() {
+        this.allMatching = true;
+        this.excluded = {};
+        this.selected = {};
+    },
+    clear() {
+        this.allMatching = false;
+        this.selected = {};
+        this.excluded = {};
+        this.lastIndex = null;
+    },
+    value(id) {
+        return this.edits[id] !== undefined ? this.edits[id] : this.cfg.rows.find((r) => r.id === id)?.suggested || '';
+    },
+    edit(id, value) {
+        const row = this.cfg.rows.find((r) => r.id === id);
+        if (row && value.trim() === row.suggested.trim()) delete this.edits[id];
+        else this.edits[id] = value;
+        delete this.errors[id];
+        // Editing a name usually means it should be approved: select the row.
+        if (!this.isSelected(id)) this.setSelected(id, true);
+    },
+    resetEdit(id) {
+        delete this.edits[id];
+        delete this.errors[id];
+    },
+    rowClass(id) {
+        if (this.state[id] === 'done') return 'opacity-50';
+        if (this.errors[id]) return 'bg-danger-soft/40';
+        return this.isSelected(id) ? 'bg-gold-50/60' : '';
+    },
+    inputClass(id) {
+        if (this.errors[id]) return 'input-invalid';
+        return this.edits[id] !== undefined ? 'ring-2 ring-gold-300 border-gold-400' : '';
+    },
+    /** Edited names must still contain Arabic letters; returns false (and marks the rows) otherwise. */
+    validEdits(ids) {
+        let ok = true;
+        ids.forEach((id) => {
+            const v = this.edits[id];
+            if (v !== undefined && !ARABIC.test(v)) {
+                this.errors[id] = this.cfg.i18n.notArabic;
+                ok = false;
+            }
+        });
+        return ok;
+    },
+    editsFor(ids) {
+        const out = {};
+        Object.keys(this.edits).forEach((id) => {
+            if (!ids || ids.includes(Number(id))) out[id] = this.edits[id];
+        });
+        return out;
+    },
+    single(action, id) {
+        if (action === 'approve' && !this.validEdits([id])) return;
+        this.run(action, { mode: 'ids', ids: [id] }, 1);
+    },
+    bulk(action) {
+        const ids = this.allMatching ? null : Object.keys(this.selected).map(Number);
+        const pageIds = this.cfg.rows.map((r) => r.id).filter((id) => this.isSelected(id));
+        if (action === 'approve' && !this.validEdits(pageIds)) return;
+        const total = this.count;
+        if (!total) return;
+        const go = () => this.run(action, ids ? { mode: 'ids', ids } : { mode: 'all', except: Object.keys(this.excluded).map(Number) }, total);
+        // Large or "all matching" actions ask first; a few rows on this page go straight through.
+        if (this.allMatching || total > 25) {
+            const store = Alpine.store('confirm');
+            store.ask(null, {
+                title: this.cfg.i18n.confirmTitle,
+                message: (action === 'approve' ? this.cfg.i18n.approveAll : this.cfg.i18n.rejectAll).replace(':count', total.toLocaleString()),
+                confirmLabel: action === 'approve' ? this.cfg.i18n.approveLabel : this.cfg.i18n.rejectLabel,
+                tone: action === 'approve' ? 'neutral' : 'danger',
+            });
+            store.onAccept = go;
+        } else {
+            go();
+        }
+    },
+    async run(action, target, total) {
+        Object.assign(this, { busy: true, stopping: false, action, summary: '', progress: { processed: 0, total } });
+        const ids = target.mode === 'ids' ? target.ids : null;
+        let cursor = 0;
+        let done = 0;
+        let failures = 0;
+        const failed = [];
+        while (!this.stopping) {
+            try {
+                const r = await postJson(this.cfg.url, {
+                    action,
+                    ...target,
+                    edits: action === 'approve' ? this.editsFor(ids) : {},
+                    cursor,
+                    q: this.cfg.filters.q,
+                    source: this.cfg.filters.source,
+                });
+                failures = 0;
+                cursor = r.cursor;
+                done += r.done;
+                this.progress.processed += r.processed;
+                if (this.progress.processed > this.progress.total) this.progress.total = this.progress.processed;
+                r.failed.forEach((f) => {
+                    failed.push(f);
+                    this.errors[f.id] = f.error;
+                });
+                // Rows on this page that went through are marked done.
+                this.cfg.rows.forEach((row) => {
+                    if (row.id <= cursor && !this.errors[row.id] && (ids ? ids.includes(row.id) : !this.excluded[row.id])) {
+                        this.state[row.id] = 'done';
+                        this.doneAction[row.id] = action;
+                        delete this.selected[row.id];
+                    }
+                });
+                if (r.finished || r.processed === 0) break;
+            } catch (err) {
+                if (err.status === 422 || ++failures >= 4) {
+                    failed.push({ id: 0, error: err.message || this.cfg.i18n.error });
+                    break;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 1500 * failures));
+            }
+        }
+        this.busy = false;
+        if (this.allMatching) this.clear();
+        const message = (action === 'approve' ? this.cfg.i18n.doneApprove : this.cfg.i18n.doneReject).replace(':count', done.toLocaleString());
+        const fatal = failed.find((f) => !f.id);
+        const rowFailures = failed.filter((f) => f.id).length;
+        if (fatal) this.summary = done ? `${message} · ${fatal.error}` : fatal.error;
+        else if (total > 1 || rowFailures) this.summary = rowFailures ? `${message} · ${this.cfg.i18n.failed.replace(':count', rowFailures)}` : message;
+        else Alpine.store('toast').show(message);
+        // Whole page handled: load the next names.
+        if (!failed.length && this.openRows.length === 0) setTimeout(() => window.location.reload(), 900);
+    },
+}));
+
 Alpine.start();

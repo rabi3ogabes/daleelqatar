@@ -97,7 +97,7 @@
                     <div class="rounded-xl bg-white p-3"><dt class="text-[0.7rem] text-muted-strong">{{ __('enrichment.bulk.errors') }}</dt><dd class="mt-1 text-lg font-bold tabular-nums" :class="errors ? 'text-danger' : 'text-navy-900'" x-text="errors.toLocaleString()">0</dd></div>
                 </dl>
                 <p x-show="error" x-cloak class="mt-3 rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger" x-text="error"></p>
-                <a x-show="finished && suggested > 0" x-cloak href="{{ route('admin.enrichment.index', ['tab' => 'pending']) }}" class="btn btn-gold btn-sm mt-4 w-full">{{ __('enrichment.bulk.review_now') }}</a>
+                <a x-show="finished && suggested > 0" x-cloak :href="mode === 'names' ? @js(route('admin.enrichment.index', ['tab' => 'names'])) : @js(route('admin.enrichment.index', ['tab' => 'pending']))" class="btn btn-gold btn-sm mt-4 w-full">{{ __('enrichment.bulk.review_now') }}</a>
             </div>
         </div>
     </x-dash.panel>
@@ -109,12 +109,22 @@
                 <a href="{{ route('admin.enrichment.index', ['tab' => $t]) }}" @class(['shrink-0 rounded-t-lg border-b-2 px-4 py-2.5 text-sm font-medium transition', 'border-gold-500 text-navy-900' => $tab === $t, 'border-transparent text-muted-strong hover:text-navy-900' => $tab !== $t]) @if($tab === $t) aria-current="page" @endif>
                     {{ __('enrichment.tabs.'.$t) }}
                     @if($t === 'pending' && $stats['pending'])<span class="ms-1 rounded-full bg-gold-100 px-1.5 py-0.5 text-[0.65rem] font-bold text-gold-800">{{ format_number($stats['pending']) }}</span>@endif
+                    @if($t === 'names' && $namesPending)<span class="ms-1 rounded-full bg-gold-100 px-1.5 py-0.5 text-[0.65rem] font-bold text-gold-800">{{ format_number($namesPending) }}</span>@endif
                     @if($t === 'no_website' && $stats['no_website_found'])<span class="ms-1 rounded-full bg-navy-100 px-1.5 py-0.5 text-[0.65rem] font-bold text-navy-700">{{ format_number($stats['no_website_found']) }}</span>@endif
                 </a>
             @endforeach
         </nav>
 
-        @if($items->isEmpty())
+        @if($tab === 'pending' && $namesPending > 0)
+            <a href="{{ route('admin.enrichment.index', ['tab' => 'names']) }}" class="flex items-center gap-3 border-b border-gold-200 bg-gold-50/70 px-5 py-3 text-sm text-navy-900 transition hover:bg-gold-50">
+                <x-icon name="languages" class="size-5 text-gold-700" />
+                <span class="flex-1"><strong>{{ __('enrichment.names.review_bulk') }}</strong> · {{ trans_choice('enrichment.names.waiting', $namesPending, ['count' => format_number($namesPending)]) }}</span>
+                <x-icon name="chevron-right" class="size-4 text-gold-700 rtl:rotate-180" />
+            </a>
+        @endif
+        @if($tab === 'names')
+            @include('admin.enrichment.partials.names')
+        @elseif($items->isEmpty())
             <div class="p-5"><x-empty-state :icon="$tab === 'no_website' ? 'globe' : 'sparkles'" :title="__('enrichment.empty.'.$tab)" :text="__('enrichment.empty.'.$tab.'_text')" /></div>
         @elseif($tab === 'no_website')
             <x-dash.table>
