@@ -62,6 +62,7 @@ class Business extends Model
             'extra_phones' => 'array',
             'extra_emails' => 'array',
             'imported_at' => 'datetime',
+            'enriched_at' => 'datetime',
         ];
     }
 
