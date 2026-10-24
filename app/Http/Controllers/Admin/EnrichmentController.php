@@ -16,6 +16,7 @@ use App\Support\Enrichment\AiWriter;
 use App\Support\Enrichment\DataQuality;
 use App\Support\Enrichment\Enricher;
 use App\Support\Enrichment\GooglePlaces;
+use App\Support\Enrichment\NameReview;
 use App\Support\Enrichment\SuggestionApplier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -33,7 +34,9 @@ class EnrichmentController extends Controller
 {
     public const SCOPES = ['missing_arabic', 'missing_description', 'missing_website', 'missing_location', 'not_enriched', 'all'];
 
-    public const TABS = ['pending', 'no_website', 'applied', 'rejected', 'empty'];
+    public const TABS = ['pending', 'names', 'no_website', 'applied', 'rejected', 'empty'];
+
+    public const NAME_PAGE_SIZES = [25, 50, 100];
 
     private const BUDGET_SECONDS = 18.0;
 
@@ -42,23 +45,70 @@ class EnrichmentController extends Controller
 
     public function __construct(private readonly Enricher $enricher, private readonly AiWriter $ai) {}
 
-    public function index(Request $request): View
+    public function index(Request $request, NameReview $names): View
     {
         $tab = in_array($request->query('tab'), self::TABS, true) ? $request->query('tab') : 'pending';
+        $nameFilters = [
+            'q' => mb_substr(trim((string) $request->query('q', '')), 0, 80),
+            'source' => in_array($request->query('source'), NameReview::SOURCES, true) ? $request->query('source') : null,
+            'per_page' => in_array((int) $request->query('per_page'), self::NAME_PAGE_SIZES, true) ? (int) $request->query('per_page') : 50,
+        ];
 
-        $items = $tab === 'no_website'
+        $items = $tab === 'names'
+            ? $names->query($nameFilters['q'], $nameFilters['source'])
+                ->with(['business' => fn ($q) => $q->select(['id', 'name_en', 'name_ar', 'slug', 'status', 'category_id', 'municipality_id'])
+                    ->with(['category:id,name_ar,name_en', 'municipality:id,name_ar,name_en'])])
+                ->orderBy('id')->paginate($nameFilters['per_page'])->withQueryString()
+            : ($tab === 'no_website'
             ? $this->scope(Business::query(), 'missing_website')->where('website_status', 'none')->with('category:id,name_ar,name_en')
                 ->orderBy('name_en')->paginate(25)->withQueryString()
             : BusinessSuggestion::query()->whereIn('status', $tab === 'applied' ? ['applied', 'partial'] : [$tab])
                 ->with(['business:id,name_ar,name_en,slug,owner_id,status', 'reviewer:id,name'])
-                ->latest('id')->paginate(25)->withQueryString();
+                ->latest('id')->paginate(25)->withQueryString());
 
         return view('admin.enrichment.index', [
             'tab' => $tab,
+            'nameFilters' => $nameFilters,
+            'namesPending' => $names->query()->count(),
             'items' => $items,
             'stats' => DataQuality::stats(true),
             'setup' => ['google' => GooglePlaces::enabled(), 'ai' => $this->ai->available()],
         ]);
+    }
+
+    /**
+     * Bulk review of suggested Arabic names: the rows ticked on a page, or every matching
+     * row (minus the ones unticked). Called repeatedly by the page until finished.
+     */
+    public function names(Request $request, NameReview $names): JsonResponse
+    {
+        $data = $request->validate([
+            'action' => ['required', Rule::in(['approve', 'reject'])],
+            'mode' => ['required', Rule::in(['ids', 'all'])],
+            'ids' => ['required_if:mode,ids', 'array', 'max:500'],
+            'ids.*' => ['integer'],
+            'except' => ['array', 'max:5000'],
+            'except.*' => ['integer'],
+            'edits' => ['array', 'max:500'],
+            'edits.*' => ['nullable', 'string', 'max:160'],
+            'cursor' => ['nullable', 'integer', 'min:0'],
+            'q' => ['nullable', 'string', 'max:80'],
+            'source' => ['nullable', Rule::in(NameReview::SOURCES)],
+        ]);
+        Deadline::start(self::DEADLINE_SECONDS);
+
+        $result = $names->run(
+            $data['action'],
+            $data['mode'] === 'ids' ? array_map('intval', $data['ids'] ?? []) : null,
+            array_map('intval', $data['except'] ?? []),
+            array_filter($data['edits'] ?? [], fn ($v) => is_string($v) && trim($v) !== ''),
+            (int) ($data['cursor'] ?? 0),
+            $request->user(),
+            $data['q'] ?? null,
+            $data['source'] ?? null,
+        );
+
+        return response()->json($result + ['pending' => $names->query()->count()]);
     }
 
     /** One step of a bulk run, called repeatedly by the page until nothing is left. */

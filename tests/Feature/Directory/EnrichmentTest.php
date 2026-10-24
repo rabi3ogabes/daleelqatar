@@ -333,6 +333,10 @@ class EnrichmentTest extends TestCase
 
         $this->actingAs($admin)->get(route('admin.enrichment.index'))->assertOk()->assertSee('Al Ansari Furniture Centre')->assertSee(__('enrichment.bulk.title'));
         $this->actingAs($admin)->get(route('admin.enrichment.index', ['tab' => 'no_website']))->assertOk();
+        // A checked listing without a website is shown with how long ago it was checked.
+        $checked = Business::factory()->published()->create(['name_en' => 'Checked No Website Co', 'website' => null, 'is_demo' => false]);
+        $checked->forceFill(['website_status' => 'none', 'enriched_at' => now()->subDays(2)])->saveQuietly();
+        $this->actingAs($admin)->get(route('en.admin.enrichment.index', ['tab' => 'no_website']))->assertOk()->assertSee('Checked No Website Co')->assertSee('2 days ago');
         $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk()->assertSee(__('enrichment.quality.title'));
         $this->actingAs($admin)->get(route('admin.businesses.show', $business->id))->assertOk()->assertSee(__('enrichment.panel.title'));
         $this->actingAs($admin)->post(route('admin.enrichment.business', $business->id))->assertRedirect();

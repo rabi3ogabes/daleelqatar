@@ -62,6 +62,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified', 'can:adm
 
         Route::get('/enrichment', [Admin\EnrichmentController::class, 'index'])->name('enrichment.index');
         Route::post('/enrichment/bulk', [Admin\EnrichmentController::class, 'bulk'])->middleware('throttle:120,1')->name('enrichment.bulk');
+        Route::post('/enrichment/names', [Admin\EnrichmentController::class, 'names'])->middleware('throttle:240,1')->name('enrichment.names');
         Route::post('/enrichment/businesses/{business}', [Admin\EnrichmentController::class, 'business'])->whereNumber('business')->middleware('throttle:30,1')->name('enrichment.business');
         Route::post('/enrichment/businesses/{business}/directory', [Admin\EnrichmentController::class, 'directory'])->whereNumber('business')->middleware('throttle:30,1')->name('enrichment.directory');
         Route::get('/enrichment/{suggestion}', [Admin\EnrichmentController::class, 'show'])->whereNumber('suggestion')->name('enrichment.show');

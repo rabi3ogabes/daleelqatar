@@ -111,6 +111,49 @@ final class SuggestionApplier
         return $suggestion;
     }
 
+    /**
+     * Approves one field of a suggestion (used by the bulk Arabic-name review). When the
+     * suggestion holds other fields too, those stay pending for a normal review.
+     *
+     * @throws ValidationException
+     */
+    public function applyField(BusinessSuggestion $suggestion, string $field, mixed $edited, User $by): BusinessSuggestion
+    {
+        abort_unless($suggestion->isPending() && isset($suggestion->fields[$field]), 409);
+        if (count($suggestion->fields) === 1) {
+            return $this->apply($suggestion, [$field => $edited], $by);
+        }
+
+        $value = $this->clean($field, $edited ?? $suggestion->fields[$field]['value'], $suggestion->business_id);
+        abort_unless(isset(self::TEXT_LIMITS[$field]), 422);
+
+        return DB::transaction(function () use ($suggestion, $field, $value) {
+            $business = Business::query()->lockForUpdate()->findOrFail($suggestion->business_id);
+            $original = $business->getAttributes();
+            $business->{$field} = $value;
+            $business->save();
+
+            $source = $suggestion->fields[$field]['source'] ?? null;
+            $suggestion->forceFill(['fields' => array_diff_key($suggestion->fields, [$field => true])])->save();
+            $this->audit->logChanges('enrichment.applied', $business, $original, ['suggestion_id' => $suggestion->id, 'fields' => [$field], 'sources' => [$source]]);
+
+            return $suggestion;
+        });
+    }
+
+    /** Declines one field; the suggestion is closed when nothing is left in it. */
+    public function rejectField(BusinessSuggestion $suggestion, string $field, User $by): void
+    {
+        abort_unless($suggestion->isPending() && isset($suggestion->fields[$field]), 409);
+        if (count($suggestion->fields) === 1) {
+            $this->reject($suggestion, $by);
+
+            return;
+        }
+        $suggestion->forceFill(['fields' => array_diff_key($suggestion->fields, [$field => true])])->save();
+        $this->audit->log('enrichment.rejected', $suggestion->business, [], [], ['suggestion_id' => $suggestion->id, 'fields' => [$field]]);
+    }
+
     /** @return array{png: string, url: string} */
     private function logo(string $url): array
     {
