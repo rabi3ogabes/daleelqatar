@@ -92,3 +92,44 @@
 [dir='rtl'] .leaflet-popup-content {
     text-align: right;
 }
+
+/* Google Maps finder: results coloured by how they match the directory. */
+.dq-finder-pin {
+    background: none;
+    border: 0;
+}
+.dq-finder-pin span {
+    display: block;
+    width: 18px;
+    height: 18px;
+    border-radius: 9999px;
+    border: 3px solid #fff;
+    background: #c9a35e;
+    box-shadow: 0 0 0 1px rgb(16 28 50 / 0.25), 0 4px 10px rgb(16 28 50 / 0.3);
+    transition: transform 0.15s ease;
+}
+.dq-finder-pin:hover span {
+    transform: scale(1.25);
+}
+.dq-finder-pin--possible span,
+.dq-finder-pin--likely span {
+    background: #e5a33a;
+}
+.dq-finder-pin--linked span,
+.dq-finder-pin--added span {
+    background: #1f8a5b;
+}
+.dq-finder-pin--closed span {
+    background: #9aa3b2;
+}
+.dq-picking,
+.dq-picking .leaflet-interactive {
+    cursor: crosshair !important;
+}
+.dq-popup button.dq-popup__title {
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    text-align: inherit;
+}

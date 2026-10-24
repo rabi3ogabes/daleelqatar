@@ -60,6 +60,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'verified', 'can:adm
         Route::post('/discovery/analyze', [Admin\DiscoveryController::class, 'analyze'])->middleware('throttle:20,1')->name('discovery.analyze');
         Route::get('/discovery/{source}/new', [Admin\DiscoveryController::class, 'newCompanies'])->name('discovery.new');
 
+        Route::get('/places', [Admin\PlaceFinderController::class, 'index'])->name('places.index');
+        Route::post('/places/search', [Admin\PlaceFinderController::class, 'search'])->middleware('throttle:40,1')->name('places.search');
+        Route::post('/places/add', [Admin\PlaceFinderController::class, 'add'])->middleware('throttle:60,1')->name('places.add');
+        Route::post('/places/add-many', [Admin\PlaceFinderController::class, 'addMany'])->middleware('throttle:30,1')->name('places.add-many');
+        Route::post('/places/review', [Admin\PlaceFinderController::class, 'review'])->middleware('throttle:30,1')->name('places.review');
+
         Route::get('/enrichment', [Admin\EnrichmentController::class, 'index'])->name('enrichment.index');
         Route::post('/enrichment/bulk', [Admin\EnrichmentController::class, 'bulk'])->middleware('throttle:120,1')->name('enrichment.bulk');
         Route::post('/enrichment/names', [Admin\EnrichmentController::class, 'names'])->middleware('throttle:240,1')->name('enrichment.names');

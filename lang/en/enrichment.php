@@ -174,6 +174,10 @@ return [
         'ai_failed' => 'AI suggestions could not be created this time. Try again later.',
         'out_of_time' => 'The website check did not fit in this run. Run it again to finish it.',
         'ai_out_of_time' => 'The AI step did not fit in this run. Run it again to add the description and services.',
+        'google_differs' => 'Google Maps shows this differently. Tick it only if Google is right.',
+        'google_phone_differs' => 'Google Maps shows another number. Approving replaces the main phone number.',
+        'google_location_differs' => 'The Google Maps pin is more than 150 m from the listing’s pin.',
+        'google_hours_differ' => 'Google Maps shows different opening hours. Approving replaces the listing’s hours.',
     ],
     'reasons' => [
         'name_exact' => 'Same name',
@@ -187,6 +191,7 @@ return [
         'area_match' => 'Same area',
         'closed_permanently' => 'Permanently closed',
         'chosen_by_admin' => 'Chosen by an admin',
+        'place_linked' => 'Linked to this place',
     ],
     'status' => [
         'pending' => 'Waiting for review',

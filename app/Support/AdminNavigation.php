@@ -39,6 +39,7 @@ final class AdminNavigation
                 $can('imports.manage') ? ['label' => __('imports.nav.imports'), 'route' => 'admin.imports.index', 'icon' => 'file-spreadsheet', 'pattern' => 'admin.imports.*'] : null,
                 $can('imports.manage') ? ['label' => __('imports.nav.discovery'), 'route' => 'admin.discovery.index', 'icon' => 'radar', 'pattern' => 'admin.discovery.*'] : null,
                 $can('imports.manage') ? ['label' => __('enrichment.nav'), 'route' => 'admin.enrichment.index', 'icon' => 'sparkles', 'pattern' => 'admin.enrichment.*', 'badge' => $b['enrichment']] : null,
+                $can('imports.manage') ? ['label' => __('places.nav'), 'route' => 'admin.places.index', 'icon' => 'map-pinned', 'pattern' => 'admin.places.*'] : null,
                 $can('categories.manage') ? ['label' => __('admin.nav.categories'), 'route' => 'admin.categories.index', 'icon' => 'folder-tree', 'pattern' => 'admin.categories.*'] : null,
                 $can('businesses.update') ? ['label' => __('category_review.nav'), 'route' => 'admin.category-review.index', 'icon' => 'layers', 'pattern' => 'admin.category-review.*', 'badge' => $b['categories']] : null,
                 $can('locations.manage') ? ['label' => __('admin.nav.locations'), 'route' => 'admin.municipalities.index', 'icon' => 'map-pin', 'pattern' => ['admin.municipalities.*', 'admin.areas.*']] : null,
