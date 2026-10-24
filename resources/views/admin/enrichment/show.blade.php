@@ -222,7 +222,8 @@
                     </div>
                     <a href="{{ $match['maps_url'] }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm mt-4 w-full"><x-icon name="external-link" class="size-4" />{{ __('enrichment.open_in_maps') }}</a>
                 @else
-                    <p class="text-sm text-muted-strong">{{ __('enrichment.notes.'.(($suggestion->notes['google'] ?? null) === 'google_not_configured' ? 'google_not_configured' : (! empty($match['rejected']) ? 'low_match' : 'no_match'))) }}</p>
+                    @php $googleNote = (string) ($suggestion->notes['google'] ?? ''); @endphp
+                    <p class="text-sm text-muted-strong">{{ str_starts_with($googleNote, 'google_error:') ? \App\Support\Enrichment\GooglePlaces::problem($googleNote) : __('enrichment.notes.'.($googleNote === 'google_not_configured' ? 'google_not_configured' : (! empty($match['rejected']) ? 'low_match' : 'no_match'))) }}</p>
                     @if(! empty($match['rejected']))
                         <div class="mt-3 rounded-xl border border-navy-100 p-3 text-sm">
                             <p class="font-medium text-navy-900">{{ $match['name'] }} <span class="text-xs text-muted">({{ $match['score'] }}%)</span></p>

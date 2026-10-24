@@ -7,6 +7,7 @@ namespace App\Support\Enrichment;
 use App\Support\Deadline;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Google Places API (New). Uses the official API — Google Maps pages are
@@ -116,6 +117,38 @@ final class GooglePlaces
         return $this->call('get', '/places/'.$placeId, $fields, ['languageCode' => $language, 'regionCode' => 'QA']);
     }
 
+    /** What an admin should know about a failed Google call (an EnrichmentException code). */
+    public static function problem(string $code): string
+    {
+        if (str_starts_with($code, 'google_error:')) {
+            [, $status, $reason] = array_pad(explode(':', $code, 3), 3, null);
+            $key = match ($reason) {
+                'SERVICE_DISABLED' => 'service_disabled',
+                'BILLING_DISABLED' => 'billing_disabled',
+                'API_KEY_SERVICE_BLOCKED' => 'key_service_blocked',
+                'API_KEY_HTTP_REFERRER_BLOCKED' => 'key_referrer_blocked',
+                'API_KEY_IP_ADDRESS_BLOCKED' => 'key_ip_blocked',
+                'API_KEY_INVALID', 'API_KEY_EXPIRED' => 'key_invalid',
+                default => match ($status) {
+                    'PERMISSION_DENIED' => 'google_denied',
+                    'RESOURCE_EXHAUSTED' => 'google_quota',
+                    'INVALID_ARGUMENT' => 'google_invalid',
+                    default => 'google_failed',
+                },
+            };
+
+            return __('places.errors.'.$key);
+        }
+
+        return __(match ($code) {
+            'google_not_configured' => 'places.errors.not_configured',
+            'google_unreachable' => 'places.errors.google_unreachable',
+            'google_out_of_time' => 'places.errors.out_of_time',
+            'google_place_not_found', 'invalid_place_id' => 'places.errors.place_gone',
+            default => 'places.errors.google_failed',
+        });
+    }
+
     /** Public Maps link for a place (allowed to keep: it is derived from the Place ID). */
     public static function mapsUrl(string $placeId): string
     {
@@ -142,7 +175,10 @@ final class GooglePlaces
         }
         if ($response->failed()) {
             $status = (string) data_get($response->json(), 'error.status', 'HTTP_'.$response->status());
-            throw new EnrichmentException('google_error:'.$status);
+            // Google says why in error.details (e.g. SERVICE_DISABLED, API_KEY_SERVICE_BLOCKED): that tells the admin what to fix.
+            $reason = collect((array) data_get($response->json(), 'error.details', []))->pluck('reason')->filter(fn ($r) => is_string($r) && preg_match('/^[A-Z_]{3,60}$/', $r))->first();
+            Log::warning('Google Places request refused', ['status' => $status, 'reason' => $reason, 'message' => mb_substr((string) data_get($response->json(), 'error.message'), 0, 300)]);
+            throw new EnrichmentException('google_error:'.$status.($reason ? ':'.$reason : ''));
         }
 
         return (array) $response->json();

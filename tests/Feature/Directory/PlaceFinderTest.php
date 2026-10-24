@@ -26,6 +26,8 @@ class PlaceFinderTest extends TestCase
 
     private int $searchStatus = 200;
 
+    private ?string $searchReason = null;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -49,7 +51,8 @@ class PlaceFinderTest extends TestCase
             $url = $request->url();
             if (str_contains($url, '/v1/places:searchText')) {
                 if ($this->searchStatus !== 200) {
-                    return Http::response(['error' => ['status' => 'PERMISSION_DENIED']], $this->searchStatus);
+                    return Http::response(['error' => array_filter(['status' => 'PERMISSION_DENIED', 'message' => 'Refused.',
+                        'details' => $this->searchReason ? [['@type' => 'type.googleapis.com/google.rpc.ErrorInfo', 'reason' => $this->searchReason]] : null])], $this->searchStatus);
                 }
 
                 return Http::response(array_filter(['places' => $this->search, 'nextPageToken' => $this->nextToken]));
@@ -170,6 +173,14 @@ class PlaceFinderTest extends TestCase
         $this->searchStatus = 403;
         $this->actingAs($this->admin())->postJson('/en/admin/places/search', ['keyword' => 'restaurants', 'mode' => 'area'])
             ->assertStatus(502)->assertJsonPath('message', 'Google refused the request. Check that the Places API (New) is enabled for the API key.');
+
+        // Google's reason says what to fix.
+        $this->searchReason = 'SERVICE_DISABLED';
+        $this->actingAs($this->admin())->postJson('/en/admin/places/search', ['keyword' => 'restaurants', 'mode' => 'area'])
+            ->assertStatus(502)->assertJsonPath('message', __('places.errors.service_disabled'));
+        $this->searchReason = 'API_KEY_SERVICE_BLOCKED';
+        $this->actingAs($this->admin())->postJson('/en/admin/places/search', ['keyword' => 'restaurants', 'mode' => 'area'])
+            ->assertJsonPath('message', __('places.errors.key_service_blocked'));
 
         config(['services.google_places.key' => null]);
         $this->actingAs($this->admin())->postJson('/en/admin/places/search', ['keyword' => 'restaurants', 'mode' => 'area'])
