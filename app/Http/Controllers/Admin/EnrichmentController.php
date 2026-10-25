@@ -131,6 +131,7 @@ class EnrichmentController extends Controller
         $processed = 0;
         $suggested = 0;
         $errors = 0;
+        $stopped = null;
 
         if ($data['mode'] === 'names') {
             $batch = $this->scope(Business::query(), $scope)->where('id', '>', $cursor)->orderBy('id')->limit(40)->get();
@@ -152,6 +153,7 @@ class EnrichmentController extends Controller
                 if ($business === null) {
                     break;
                 }
+                $previous = $cursor;
                 $cursor = (int) $business->id;
                 try {
                     $suggestion = $this->enricher->run($business, $options);
@@ -161,6 +163,15 @@ class EnrichmentController extends Controller
                     $errors++;
                 }
                 $processed++;
+
+                // Google refusing (quota used up, key settings) will not change for the next listings:
+                // stop here and say why, so thousands of listings are not checked without Google.
+                if (isset($suggestion) && Enricher::googleRefused($suggestion->notes)) {
+                    $stopped = GooglePlaces::problem((string) $suggestion->notes['google']);
+                    $cursor = $previous;
+                    break;
+                }
+                unset($suggestion);
             }
         }
 
@@ -168,7 +179,7 @@ class EnrichmentController extends Controller
 
         return response()->json([
             'cursor' => $cursor, 'processed' => $processed, 'suggested' => $suggested, 'errors' => $errors,
-            'remaining' => $remaining, 'done' => $remaining === 0,
+            'remaining' => $remaining, 'done' => $remaining === 0, 'stopped' => $stopped,
         ]);
     }
 
@@ -336,7 +347,7 @@ class EnrichmentController extends Controller
             'missing_description' => $query->where(fn ($q) => $q->whereNull('description_en')->orWhere('description_en', '')->orWhereNull('description_ar')->orWhere('description_ar', '')),
             'missing_website' => $query->where(fn ($q) => $q->whereNull('website')->orWhere('website', '')),
             'missing_location' => $query->whereNull('latitude'),
-            'not_enriched' => $query->whereNull('enriched_at'),
+            'not_enriched' => $query->whereRaw(DataQuality::DUE_SQL),
             default => $query,
         };
     }
