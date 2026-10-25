@@ -575,14 +575,22 @@ final class Enricher
             ]);
 
             // A check cut short by the request's time limit stays "not enriched", so the next run finishes it.
+            // So does one Google refused or could not be reached (quota, key settings): it is retried once Google answers.
             // One directory looked up is not a full check: the listing stays due for one.
-            $cutShort = array_intersect(array_filter($notes, 'is_string'), ['out_of_time', 'ai_out_of_time', 'google_out_of_time']) !== [];
+            $cutShort = array_intersect(array_filter($notes, 'is_string'), ['out_of_time', 'ai_out_of_time', 'google_out_of_time', 'google_unreachable']) !== []
+                || self::googleRefused($notes);
             if (! $merge) {
                 $business->forceFill(['enriched_at' => $cutShort ? $business->enriched_at : now(), 'website_status' => $websiteStatus])->saveQuietly();
             }
 
             return $suggestion;
         });
+    }
+
+    /** Whether Google refused the request (quota, key or project settings) — not a "no match". */
+    public static function googleRefused(?array $notes): bool
+    {
+        return str_starts_with((string) ($notes['google'] ?? ''), 'google_error:');
     }
 
     /** Display order on the review screen. */

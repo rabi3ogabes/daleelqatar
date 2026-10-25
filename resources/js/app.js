@@ -621,6 +621,11 @@ Alpine.data('enrichmentRunner', (cfg) => ({
                 this.suggested += r.suggested;
                 this.errors += r.errors;
                 this.remaining = r.remaining;
+                // Google refused (quota, key settings): stop and show why instead of going on without it.
+                if (r.stopped) {
+                    this.error = r.stopped;
+                    break;
+                }
                 if (r.done || r.processed === 0) break;
             } catch (err) {
                 this.error = err.message;

@@ -10,6 +10,7 @@ use App\Models\Municipality;
 use App\Services\SettingsService;
 use App\Support\Discovery\UrlGuard;
 use App\Support\Enrichment\AiWriter;
+use App\Support\Enrichment\DataQuality;
 use App\Support\Enrichment\Enricher;
 use App\Support\Enrichment\WebsiteReader;
 use App\Support\Permissions;
@@ -51,6 +52,10 @@ class EnrichmentTest extends TestCase
         Http::fake(function (Request $request) {
             $url = $request->url();
             if (str_contains($url, 'places.googleapis.com/v1/places:searchText')) {
+                if (isset($this->google['search_error'])) {
+                    return Http::response(['error' => $this->google['search_error']], 429);
+                }
+
                 return Http::response(['places' => $this->google['search']]);
             }
             if (str_contains($url, 'places.googleapis.com/v1/places/')) {
@@ -321,6 +326,34 @@ class EnrichmentTest extends TestCase
         $this->assertSame(2, $response->json('processed'));
         $this->assertTrue($response->json('done'));
         $this->assertSame(2, BusinessSuggestion::query()->pending()->count());
+    }
+
+    public function test_a_run_google_refuses_stops_and_leaves_listings_due(): void
+    {
+        $admin = $this->makeUser(Permissions::ADMIN);
+        $first = $this->business();
+        $second = $this->business(['slug' => 'pearl-trading', 'name_en' => 'Pearl Trading W.L.L', 'email' => null]);
+        $this->google['search_error'] = ['code' => 429, 'status' => 'RESOURCE_EXHAUSTED', 'message' => 'Quota exceeded.'];
+
+        $response = $this->actingAs($admin)->postJson(route('admin.enrichment.bulk'), ['scope' => 'not_enriched', 'mode' => 'full', 'website' => false, 'ai' => false])
+            ->assertOk()->assertJsonPath('stopped', __('places.errors.google_quota'))->assertJsonPath('processed', 1);
+
+        // The run stopped at the first listing and both stay "not checked", so the next run does them with Google.
+        $this->assertSame(0, $response->json('cursor'));
+        $this->assertNull($first->fresh()->enriched_at);
+        $this->assertNull($second->fresh()->enriched_at);
+        $this->assertSame(2, DataQuality::stats(true)['not_enriched']);
+
+        // A listing checked while Google was refusing (before this fix) is due again too.
+        $first->forceFill(['enriched_at' => now()->subDay()])->saveQuietly();
+        $this->assertSame(2, DataQuality::stats(true)['not_enriched']);
+
+        // Once Google answers, the run goes through and the listings are checked.
+        unset($this->google['search_error']);
+        $this->actingAs($admin)->postJson(route('admin.enrichment.bulk'), ['scope' => 'not_enriched', 'mode' => 'full', 'website' => false, 'ai' => false])
+            ->assertOk()->assertJsonPath('stopped', null)->assertJsonPath('done', true);
+        $this->assertNotNull($second->fresh()->enriched_at);
+        $this->assertSame(0, DataQuality::stats(true)['not_enriched']);
     }
 
     public function test_bulk_full_run_and_pages_render(): void
