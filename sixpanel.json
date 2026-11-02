@@ -1,0 +1,58 @@
+{
+    "version": 1,
+    "kind": "php",
+    "root": "public",
+    "hooks": {
+        "afterBuild": "npm ci --no-audit --no-fund && npm run build"
+    },
+    "php": {
+        "extensions": ["pdo_pgsql", "pgsql", "intl", "gd", "zip"],
+        "settings": {
+            "memory_limit": "512M",
+            "max_execution_time": 60,
+            "timezone": "Asia/Qatar"
+        }
+    },
+    "env": {
+        "required": [
+            "APP_KEY",
+            "DB_HOST",
+            "DB_PASSWORD",
+            "SUPABASE_SERVICE_ROLE_KEY",
+            "GOOGLE_MAPS_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "CRON_SECRET"
+        ],
+        "defaults": {
+            "APP_NAME": "\"Daleel Qatar\"",
+            "APP_ENV": "production",
+            "APP_DEBUG": "false",
+            "APP_URL": "https://daleelqatar.com",
+            "APP_TIMEZONE": "Asia/Qatar",
+            "APP_LOCALE": "ar",
+            "APP_FALLBACK_LOCALE": "en",
+            "APP_SUPPORTED_LOCALES": "ar,en",
+            "LOG_CHANNEL": "stack",
+            "LOG_STACK": "single",
+            "LOG_LEVEL": "warning",
+            "DB_CONNECTION": "pgsql",
+            "DB_PORT": "5432",
+            "DB_DATABASE": "postgres",
+            "DB_USERNAME": "postgres.dbgzxsffvmdoxuytfqkz",
+            "DB_SSLMODE": "require",
+            "DB_SEARCH_PATH": "daleel,extensions,public",
+            "QUEUE_CONNECTION": "sync",
+            "SESSION_DRIVER": "database",
+            "SESSION_SECURE_COOKIE": "true",
+            "CACHE_STORE": "database",
+            "SUPABASE_URL": "https://dbgzxsffvmdoxuytfqkz.supabase.co",
+            "MEDIA_DISK": "supabase",
+            "PRIVATE_MEDIA_DISK": "supabase_private",
+            "IMPORTS_DISK": "supabase_imports"
+        }
+    },
+    "cron": [
+        { "name": "maintenance", "schedule": "0 3 * * *", "path": "/cron/maintenance" },
+        { "name": "discovery", "schedule": "30 2 * * *", "path": "/cron/discovery" }
+    ]
+}
